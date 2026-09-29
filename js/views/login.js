@@ -1,5 +1,5 @@
 // 보직 계정 로그인: 계정은 사람이 아니라 보직(자리)에 발급됩니다.
-import { api, esc, toast, dday } from '../util.js?v=3fe14b8f04';
+import { api, esc, toast, dday } from '../util.js?v=b6722bdb4e';
 
 export async function render(root, app) {
   root.innerHTML = `

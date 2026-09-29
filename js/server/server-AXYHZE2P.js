@@ -1,4 +1,4 @@
-import{a as Ye,b as Ae}from"./chunk-43EKF5SZ.js";import{a as Ot}from"./chunk-6ZYZWSEX.js";import"./chunk-SQE76S5B.js";var ks=()=>{},gs=()=>!1,Ss=e=>String(e).replace(/\/[^/]*$/,"")||"/",It=(...e)=>e.join("/").replace(/\/+/g,"/"),ws=It,xe=e=>{try{return new URL(e).pathname}catch{return String(e)}},se={mkdirSync:ks,existsSync:gs,dirname:Ss,join:It,resolve:ws};var Rs=se.dirname(xe(import.meta.url)),$s=process.env.BOJIK_DATA_DIR||se.join(Rs,"..","data"),Ge=process.env.BOJIK_DB||se.join($s,"bojik.db"),Os=`
+import{a as Ye,b as Ae}from"./chunk-43EKF5SZ.js";import{a as Ot}from"./chunk-35GATXZS.js";import"./chunk-SQE76S5B.js";var ks=()=>{},gs=()=>!1,Ss=e=>String(e).replace(/\/[^/]*$/,"")||"/",It=(...e)=>e.join("/").replace(/\/+/g,"/"),ws=It,xe=e=>{try{return new URL(e).pathname}catch{return String(e)}},se={mkdirSync:ks,existsSync:gs,dirname:Ss,join:It,resolve:ws};var Rs=se.dirname(xe(import.meta.url)),$s=process.env.BOJIK_DATA_DIR||se.join(Rs,"..","data"),Ge=process.env.BOJIK_DB||se.join($s,"bojik.db"),Os=`
 CREATE TABLE IF NOT EXISTS units (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, short TEXT, parent_id TEXT, level TEXT
 );
