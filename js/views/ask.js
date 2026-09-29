@@ -1,5 +1,5 @@
 // 질문: 권한 기반 GraphRAG 챗 + 근거·출처 + 검색 과정 시각화
-import { api, esc, md, icon, toast, fmtDate } from '../util.js';
+import { api, esc, md, icon, toast, fmtDate } from '../util.js?v=3fe14b8f04';
 
 const SUGGEST = {
   default: ['배차 신청 마감이 언제야?', '야간에 차량 운행하려면 누구 승인 받아야 해?', 'DTIS 운행종료 안 하면 어떻게 돼?', '유류 결산 어떻게 해?', '사고 나면 뭐부터 해야 해?', '운전병 자격 미등록 오류 뜨면?', '휴가 처리 절차 알려줘'],
