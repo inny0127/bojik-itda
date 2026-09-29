@@ -1,8 +1,6 @@
 // 보직 계정 로그인: 계정은 사람이 아니라 보직(자리)에 발급됩니다.
 import { api, esc, toast, dday } from '../util.js';
 
-const KIND = { seat: '보직', admin: '체계관리' };
-
 export async function render(root, app) {
   root.innerHTML = `
   <div class="login">
@@ -15,13 +13,9 @@ export async function render(root, app) {
           <div class="field"><label for="unitSel">소속 부대</label><select class="select" id="unitSel"></select></div>
           <div class="field"><label for="seatSel">보직</label><select class="select" id="seatSel" name="account"></select></div>
           <div class="seat-now" id="seatNow"></div>
-          <div class="field"><label for="pw">비밀번호</label><input class="input" id="pw" name="password" type="password" autocomplete="current-password" required></div>
+          <div class="field"><label for="pw">비밀번호</label><input class="input" id="pw" name="password" type="password" autocomplete="current-password" required${window.BOJIK_STATIC ? ' value="demo1234"' : ''}></div>
           <button class="btn primary block" type="submit">로그인</button>
         </form>
-      </section>
-      <section class="login-demo">
-        <div class="login-demo-h"><b>시연 계정</b><span class="muted">비밀번호 demo1234</span></div>
-        <div class="demo-list" id="demoList"></div>
       </section>
       <p class="login-foot muted">부대·인원·규정은 모두 시연용 가상 데이터입니다.${window.BOJIK_STATIC ? ' 입력한 내용은 이 브라우저에만 저장됩니다. <a href="#" id="resetDemo">데이터 초기화</a>' : ''}</p>
     </div>
@@ -47,6 +41,7 @@ export async function render(root, app) {
     seatSel.innerHTML = seats.filter((s) => s.unit_id === unitSel.value).map((s) => `<option value="${s.login_id}">${esc(s.name)}</option>`).join('');
     showNow();
   };
+  if (seats.length === 1) { unitSel.disabled = true; seatSel.disabled = true; }
   unitSel.onchange = fillSeats;
   seatSel.onchange = showNow;
   fillSeats();
@@ -61,18 +56,7 @@ export async function render(root, app) {
   root.querySelector('#loginForm').onsubmit = (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    doLogin(f.get('account'), f.get('password'));
+    doLogin(seatSel.value, f.get('password'));
   };
   root.querySelector('#resetDemo')?.addEventListener('click', (e) => { e.preventDefault(); window.BOJIK_STATIC.reset(); });
-  const list = root.querySelector('#demoList');
-  list.innerHTML = seats.map((s) => `
-    <button type="button" class="demo-acc" data-u="${esc(s.login_id)}">
-      <span class="who">${esc(s.name)}</span>
-      <span class="what">${esc(s.unit_short || '')} · ${esc(holderTxt(s))}</span>
-      <span class="kind">${KIND[s.kind]}</span>
-    </button>`).join('');
-  list.onclick = (e) => {
-    const b = e.target.closest('[data-u]');
-    if (b) doLogin(b.dataset.u, 'demo1234');
-  };
 }
