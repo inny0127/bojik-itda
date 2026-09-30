@@ -1,10 +1,11 @@
 // 지식그래프 탐색: 힘-방향 레이아웃(SVG), 유형 필터, 검색, 노드 상세·출처 추적
-import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=b6722bdb4e';
+import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=3b0604e9a8';
 
 export async function render(root, app) {
   const g = await api('/api/graph');
   const types = g.nodeTypes;
-  const hidden = new Set(['KnowledgeUnit', 'Person']);
+  // 처음에는 업무·체계·규정·주의 중심으로 보여 주고(절차는 노드 상세·유형 버튼으로 펼침) 화면에 맞춰 확대
+  const hidden = new Set(['KnowledgeUnit', 'Person', 'ProcedureStep']);
   const counts = {};
   g.nodes.forEach((n) => { counts[n.type] = (counts[n.type] || 0) + 1; });
 
@@ -23,7 +24,7 @@ export async function render(root, app) {
       <div class="sep" style="margin:4px 0"></div>
       <div class="xs muted"><span style="color:var(--red)">- - -</span> 미해결 충돌</div>
     </div>
-    <div class="card graph-canvas"><svg id="gsvg"></svg><div class="hint">드래그로 이동, 휠로 확대·축소</div></div>
+    <div class="card graph-canvas"><svg id="gsvg"></svg><div class="hint">드래그로 이동, 휠로 확대·축소 · <a href="#" id="gfit">전체 보기</a></div></div>
     <div class="card" style="overflow:auto"><div class="card-h"><h3>노드 상세</h3></div><div class="card-b" id="ginfo"><div class="muted small">노드를 선택하세요.</div></div></div>
   </div>`;
 
@@ -53,12 +54,16 @@ export async function render(root, app) {
     ge.innerHTML = es.map((e, i) => `<line class="g-edge ${e.type === 'CONFLICTS_WITH' ? 'conf' : ''}" data-e="${i}" data-s="${esc(e.src)}" data-d="${esc(e.dst)}"/>`).join('');
     gn.innerHTML = [...byId.values()].filter(visible).map((n) => `<g class="g-node" data-id="${esc(n.id)}"><circle r="${R(n)}" fill="${types[n.type]?.color || '#999'}"/>
       <text dy="${R(n) + 12}" text-anchor="middle" class="${LABELED.has(n.type) ? '' : 'minor'}" ${n.type === 'Task' ? 'font-weight="700" font-size="12"' : ''}>${esc(n.label.length > 16 ? `${n.label.slice(0, 16)}…` : n.label)}</text></g>`).join('');
+    edgeEls = [...ge.children].map((l) => [l, byId.get(l.dataset.s), byId.get(l.dataset.d)]);
+    nodeEls = [...gn.children].map((el) => [el, byId.get(el.dataset.id)]);
+    visNodes = nodeEls.map(([, n]) => n);
     return es;
   }
+  let edgeEls = [], nodeEls = [], visNodes = [];
   let activeEdges = build();
 
   function tick(alpha) {
-    const nodes = [...byId.values()].filter(visible);
+    const nodes = visNodes;
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i], b = nodes[j];
@@ -86,17 +91,26 @@ export async function render(root, app) {
     }
   }
   function paint() {
-    ge.querySelectorAll('line').forEach((l) => {
-      const a = byId.get(l.dataset.s), b = byId.get(l.dataset.d);
-      l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y);
-    });
-    gn.querySelectorAll('.g-node').forEach((el) => { const n = byId.get(el.dataset.id); el.setAttribute('transform', `translate(${n.x},${n.y})`); });
+    for (const [l, a, b] of edgeEls) { l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y); }
+    for (const [el, n] of nodeEls) el.setAttribute('transform', `translate(${n.x},${n.y})`);
     vp.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
     svg.classList.toggle('zoomed', view.k > 1.5);
   }
+  // 보이는 노드 전체가 화면에 들어오도록 확대·이동 (사용자가 직접 움직이기 전까지)
+  let touched = false;
+  function fit() {
+    if (!visNodes.length) return;
+    const xs = visNodes.map((n) => n.x), ys = visNodes.map((n) => n.y);
+    const x0 = Math.min(...xs) - 40, x1 = Math.max(...xs) + 40, y0 = Math.min(...ys) - 30, y1 = Math.max(...ys) + 40;
+    const k = Math.min(1.4, Math.max(0.3, Math.min(W / (x1 - x0), H / (y1 - y0))));
+    view = { k, x: W / 2 - ((x0 + x1) / 2) * k, y: H / 2 - ((y0 + y1) / 2) * k };
+  }
   let alpha = 1, raf;
-  const run = () => { tick(alpha); paint(); alpha *= 0.985; if (alpha > 0.02) raf = requestAnimationFrame(run); };
-  for (let i = 0; i < 120; i++) { tick(1); }
+  const run = () => { tick(alpha); if (!touched) fit(); paint(); alpha *= 0.96; if (alpha > 0.02) raf = requestAnimationFrame(run); };
+  // 초기 배치는 화면에 그리기 전에 최대 약 0.25초만 계산하고 나머지는 짧은 애니메이션으로 마무리
+  const tStart = performance.now();
+  for (let i = 0; i < 160 && performance.now() - tStart < 250; i++) { tick(1); }
+  alpha = 0.5;
   run();
   const reheat = (a = 0.5) => { alpha = Math.max(alpha, a); cancelAnimationFrame(raf); run(); };
 
@@ -155,6 +169,7 @@ export async function render(root, app) {
     else pan = { x: e.clientX - view.x, y: e.clientY - view.y, moved: false };
   });
   const onMove = (e) => {
+    if (drag || pan) touched = true;
     if (drag) { const p = pt(e); const n = byId.get(drag.id); n.x = p.x; n.y = p.y; drag.moved = true; paint(); }
     else if (pan) { view.x = e.clientX - pan.x; view.y = e.clientY - pan.y; pan.moved = true; paint(); }
   };
@@ -166,6 +181,7 @@ export async function render(root, app) {
   window.addEventListener('mouseup', onUp);
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
+    touched = true;
     const r = svg.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const k2 = Math.min(3, Math.max(0.3, view.k * (e.deltaY < 0 ? 1.1 : 0.9)));
@@ -176,8 +192,9 @@ export async function render(root, app) {
     const t = el.dataset.t;
     if (hidden.has(t)) hidden.delete(t); else hidden.add(t);
     el.classList.toggle('off', hidden.has(t));
-    activeEdges = build(); reheat(0.4); highlight();
+    activeEdges = build(); touched = false; reheat(0.4); highlight();
   });
+  root.querySelector('#gfit').onclick = (e) => { e.preventDefault(); touched = false; fit(); paint(); };
   root.querySelector('#gq').oninput = (e) => {
     query = e.target.value; selectedId = null; highlight();
     const q = query.trim().toLowerCase();
