@@ -217,4 +217,10 @@ function byLength(raw) {
   return pages;
 }
 
-const clean = (p) => p.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+// 글자마다 띄어진 줄(자간을 넓힌 PDF 본문, '인 수 인 계 서'처럼 띄운 제목)은 붙임 — 한 글자 한글이 대부분인 줄만
+const unspace = (line) => {
+  const toks = line.trim().split(' ');
+  const ratio = (re) => toks.filter((t) => re.test(t)).length / toks.length;
+  return toks.length >= 6 && ratio(/^.$/u) >= 0.9 && ratio(/^[가-힣]$/) >= 0.5 ? line.replace(/ /g, '') : line;
+};
+const clean = (p) => p.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').split('\n').map(unspace).join('\n').replace(/\n{3,}/g, '\n\n').trim();
