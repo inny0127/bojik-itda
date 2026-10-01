@@ -1,7 +1,7 @@
 // 학습: 자연어 입력 → AI 구조화 제안 → 사용자 수정 → 충돌 사전검증 → 승인/거부
-import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=20ebcc3e92';
-import { readDocument, ACCEPT } from '../docread.js?v=20ebcc3e92';
-import { openDoc } from './docs.js?v=20ebcc3e92';
+import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=dfdf5cb5e2';
+import { readDocument, ACCEPT } from '../docread.js?v=dfdf5cb5e2';
+import { openDoc } from './docs.js?v=dfdf5cb5e2';
 
 const SAMPLE = { url: 'samples/handover-sample-v8.pdf', name: '수송계원_인수인계서_v8_예시.pdf' };
 

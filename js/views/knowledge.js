@@ -1,5 +1,5 @@
 // 지식 목록·이력: 업무별 지식단위(여러 세대), 버전·대체 관계, 생성·수정·승인 이력 추적
-import { api, esc, modal, fmtDate, CYCLE, STATUS, ACTION, SEV, badge, person, icon, toast } from '../util.js?v=20ebcc3e92';
+import { api, esc, modal, fmtDate, CYCLE, STATUS, ACTION, SEV, badge, person, icon, toast } from '../util.js?v=dfdf5cb5e2';
 
 let tab = 'list';
 
