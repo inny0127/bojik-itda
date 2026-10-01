@@ -1,5 +1,8 @@
 // 학습: 자연어 입력 → AI 구조화 제안 → 사용자 수정 → 충돌 사전검증 → 승인/거부
-import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=3b0604e9a8';
+import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=41a5f785c8';
+import { readDocument, ACCEPT } from '../docread.js?v=41a5f785c8';
+
+const SAMPLE = { url: 'samples/handover-sample-v8.pdf', name: '수송계원_인수인계서_v8_예시.pdf' };
 
 const EXAMPLES = [
   {
@@ -53,6 +56,19 @@ export async function render(root, app, arg) {
         </div>
       </div>
       <div class="card">
+        <div class="card-h"><h3>문서로 한꺼번에 학습</h3><span class="sub">인수인계서·업무 노트·지침</span></div>
+        <div class="card-b col" style="gap:10px">
+          <label class="drop ${canWrite ? '' : 'off'}" id="impDrop">
+            <input type="file" id="impFile" accept="${ACCEPT}" hidden ${canWrite ? '' : 'disabled'}>
+            ${icon('doc', 'width="22" height="22"')}
+            <b class="small">파일을 끌어다 놓거나 눌러서 선택</b>
+            <span class="xs muted">PDF · DOCX · HWPX · TXT — 한글(HWP)은 PDF로 저장해 올리세요</span>
+          </label>
+          <div class="row wrap"><button class="btn sm" id="impSample" ${canWrite ? '' : 'disabled'}>${icon('doc')} 예시 인수인계서(가상)로 해 보기</button></div>
+          <div id="impStatus"></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-h"><h3>초안·반려</h3></div>
         <div id="drafts" class="card-b" style="padding:6px 8px"></div>
       </div>
@@ -69,6 +85,8 @@ export async function render(root, app, arg) {
   });
   root.querySelectorAll('[data-ex]').forEach((b) => b.onclick = () => { ta.value = EXAMPLES[b.dataset.ex].text; count(); });
   root.querySelector('#btnPropose').onclick = () => proposeNow(root, app);
+
+  setupImport(root, app);
 
   renderStepper(root);
   renderEditor(root, app, { canWrite, canApprove });
@@ -494,4 +512,161 @@ function drawMini(root) {
   out += `<circle cx="${cx}" cy="${cy}" r="30" fill="#1f5f4f" stroke="#fff" stroke-width="3"/><text x="${cx}" y="${cy + 4}" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">${esc(trunc(s.task.name || '업무', 8))}</text>`;
   out += `<text x="${cx}" y="${cy + 46}" font-size="10" text-anchor="middle" fill="#475569">${esc(CYCLE[s.task.cycle_type] || '')} ${esc(trunc(s.task.cycle_detail || '', 16))}</text>`;
   svg.innerHTML = out;
+}
+
+// ---------- 문서 일괄 학습 ----------
+// 파일은 브라우저에서 글자만 뽑아 쪽별로 보내고, 서버가 구간별로 구조화한 초안을 묶어 돌려줌
+const IMP = { job: null, file: null, timer: null };
+
+function setupImport(root, app) {
+  const drop = root.querySelector('#impDrop');
+  const input = root.querySelector('#impFile');
+  input.onchange = () => input.files[0] && pickFile(root, app, input.files[0]);
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f && !input.disabled) pickFile(root, app, f); };
+  root.querySelector('#impSample').onclick = async () => {
+    try {
+      const r = await fetch(SAMPLE.url);
+      if (!r.ok) throw new Error('예시 파일을 불러오지 못했습니다');
+      pickFile(root, app, new File([await r.blob()], SAMPLE.name, { type: 'application/pdf' }));
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  // 진행 중이거나 최근에 끝난 가져오기가 있으면 이어서 표시
+  api('/api/learn/import').then((job) => { if (job && root.isConnected) { IMP.job = job; renderImportStatus(root, app); if (job.status === 'running') poll(root, app); } }).catch(() => {});
+}
+
+async function pickFile(root, app, file) {
+  const st = root.querySelector('#impStatus');
+  st.innerHTML = `<div class="row small"><span class="spinner dark"></span><span id="impRead">${esc(file.name)} 읽는 중</span></div>`;
+  try {
+    const doc = await readDocument(file, (i, n) => { const el = root.querySelector('#impRead'); if (el) el.textContent = `${file.name} 읽는 중 (${i}/${n}쪽)`; });
+    IMP.file = doc;
+    st.innerHTML = `<div class="imp-file">
+      <div><b class="small">${esc(doc.title)}</b><div class="xs muted">${doc.kind} · ${doc.pages.length}쪽 · ${doc.chars.toLocaleString('ko-KR')}자</div></div>
+      <button class="btn primary sm" id="impGo">${icon('spark')} 학습 시작</button></div>
+      <div class="xs muted" style="margin-top:6px">구간별로 업무를 찾아 초안을 만들고 기존 지식과 비교합니다. 원문은 이 보직 문서로 저장되어 바로 질문에 쓰입니다. 비밀번호·개인 휴대전화 번호는 자동으로 가려집니다.</div>`;
+    st.querySelector('#impGo').onclick = () => startImport(root, app);
+  } catch (e) {
+    st.innerHTML = `<div class="precheck bad small">${esc(e.message)}</div>`;
+  }
+  root.querySelector('#impFile').value = '';
+}
+
+async function startImport(root, app) {
+  const doc = IMP.file;
+  if (!doc) return;
+  const btn = root.querySelector('#impGo');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 시작 중'; }
+  try {
+    IMP.job = await api('/api/learn/import', { body: { title: doc.title, pages: doc.pages } });
+    IMP.file = null;
+    renderImportStatus(root, app);
+    renderImportPanel(root, app);
+    root.querySelector('#impPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    poll(root, app);
+  } catch (e) {
+    toast(e.message, 'err');
+    if (btn) { btn.disabled = false; btn.innerHTML = `${icon('spark')} 학습 시작`; }
+  }
+}
+
+function poll(root, app) {
+  clearTimeout(IMP.timer);
+  IMP.timer = setTimeout(async () => {
+    if (!root.isConnected || !IMP.job) return;
+    try {
+      const job = await api(`/api/learn/import/${IMP.job.id}`);
+      const wasRunning = IMP.job.status === 'running';
+      IMP.job = job;
+      renderImportStatus(root, app);
+      if (root.querySelector('#impPanel')) renderImportPanel(root, app);
+      if (job.status === 'running') return poll(root, app);
+      if (wasRunning) {
+        await api(`/api/learn/import/${job.id}/sync`, { method: 'POST' }); // 공개 데모: 결과를 브라우저 DB에 저장
+        loadDrafts(root, app);
+        app.refreshMe?.();
+        toast(`문서에서 초안 ${job.items.length}건을 만들었습니다. 확인 후 승인하세요.`, 'ok');
+      }
+    } catch (e) { toast(e.message, 'err'); }
+  }, 1500);
+}
+
+// 왼쪽 카드: 진행 요약 + 결과 보기
+function renderImportStatus(root, app) {
+  const j = IMP.job;
+  const st = root.querySelector('#impStatus');
+  if (!st || !j || IMP.file) return;
+  const pct = j.total ? Math.round((j.done / j.total) * 100) : 0;
+  st.innerHTML = `<div class="imp-file">
+    <div style="flex:1;min-width:0"><b class="small">${esc(j.title)}</b>
+      <div class="xs muted">${j.pages}쪽 · 구간 ${j.done}/${j.total} · 초안 ${j.items.length}건${j.status === 'running' ? ' · 처리 중' : ' · 완료'}</div>
+      <div class="progress" style="margin-top:6px"><i style="width:${pct}%"></i></div></div>
+    <button class="btn sm" id="impShow">결과 보기</button></div>`;
+  st.querySelector('#impShow').onclick = () => { renderImportPanel(root, app); root.querySelector('#impPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+}
+
+// 오른쪽: 가져오기 결과 (초안 목록·일괄 승인)
+function renderImportPanel(root, app) {
+  const j = IMP.job;
+  if (!j) return;
+  const canApprove = app.me.active?.perms.includes('approve');
+  const ed = root.querySelector('#editor');
+  const prevSel = new Set([...ed.querySelectorAll('[data-pick]')].filter((c) => !c.checked).map((c) => c.dataset.pick));
+  IMP.touched = new Set([...ed.querySelectorAll('[data-pick]')].filter((c) => c.checked).map((c) => c.dataset.pick));
+  const drafts = j.items.filter((it) => it.status === 'draft');
+  const nNew = j.items.filter((it) => it.kind === 'new').length, nRev = j.items.filter((it) => it.kind === 'revision').length;
+  const nDiff = j.items.filter((it) => it.kind === 'differs').length;
+  const KIND = { new: ['신규', 'b-blue'], revision: ['개정', 'b-amber'], differs: ['내용 다름', 'b-red'] };
+  const pct = j.total ? Math.round((j.done / j.total) * 100) : 0;
+  const running = j.status === 'running';
+  ed.innerHTML = `<div class="card" id="impPanel">
+    <div class="card-h"><h3>문서 일괄 학습</h3><span class="sub">${esc(j.title)} · ${j.pages}쪽 · ${j.engine === 'llm' ? 'gpt-6-luna' : '내장 엔진'}</span>
+      ${j.docId ? `<a class="btn sm" style="margin-left:auto" href="#/docs/${esc(j.docId)}">${icon('doc')} 원문</a>` : ''}</div>
+    <div class="card-b col" style="gap:12px">
+      <div>
+        <div class="row small">${running ? '<span class="spinner dark"></span>' : icon('check', 'width="16" height="16" style="color:var(--green);flex:none"')}<b>${running ? `구간 ${j.done}/${j.total} 분석 중` : `분석 완료 — 구간 ${j.total}개`}</b>
+          <span class="muted xs" style="margin-left:auto">${running ? '구간마다 업무를 찾아 기존 지식과 비교하고 있습니다' : ''}</span></div>
+        <div class="progress" style="margin-top:8px"><i style="width:${pct}%"></i></div>
+      </div>
+      <div class="imp-stats">
+        <div><b>${nNew}</b><span>새 업무 초안</span></div>
+        <div><b>${nRev}</b><span>기존 지식 개정안</span></div>
+        <div><b>${nDiff}</b><span>기존과 내용 다름</span></div>
+        <div><b>${j.skipped.length}</b><span>이미 있는 내용</span></div>
+      </div>
+      ${j.failed && !running ? `<div class="precheck bad small row">응답을 받지 못한 구간 ${j.failed}개<button class="btn sm" id="impRetry" style="margin-left:auto">${icon('refresh')} 다시 시도</button></div>` : ''}
+      ${j.items.length ? `<div class="imp-list">${j.items.map((it) => `
+        <div class="imp-item ${it.status !== 'draft' ? 'done' : ''}">
+          ${it.status === 'draft' ? `<input type="checkbox" data-pick="${esc(it.id)}" ${prevSel.has(it.id) || (it.kind === 'differs' && !IMP.touched?.has(it.id)) ? '' : 'checked'}>` : `<span class="badge ${it.status === 'active' ? 'b-green' : 'b-gray'}">${it.status === 'active' ? '승인됨' : STATUS[it.status]?.[0] || it.status}</span>`}
+          <span class="badge ${KIND[it.kind][1]}">${it.kind === 'revision' ? `개정 v${it.version}` : KIND[it.kind][0]}</span>
+          <a href="#" data-view="${esc(it.id)}" class="small"><b>${esc(it.title)}</b></a>
+          <span class="xs muted" style="margin-left:auto;white-space:nowrap">${it.cycle ? `${esc(it.cycle)} · ` : ''}절차 ${it.steps} · 주의 ${it.cautions}${it.followups ? ` · 질문 ${it.followups}` : ''} · ${esc(it.pages)}</span>
+        </div>`).join('')}</div>` : `<div class="muted small">${running ? '찾은 업무가 여기에 차례로 표시됩니다.' : '새로 만들 초안이 없습니다.'}</div>`}
+      ${j.skipped.length ? `<details class="small"><summary class="muted">이미 등록된 내용과 같아 건너뜀 ${j.skipped.length}건</summary><div class="xs muted" style="margin-top:6px">${j.skipped.map((k) => `${esc(k.title)} (${esc(k.pages)})`).join(' · ')}</div></details>` : ''}
+      ${nDiff ? `<div class="xs muted">'내용 다름'은 같은 업무의 기존 지식과 다른 내용이 적혀 있는 초안입니다. 제목을 눌러 비교한 뒤 기존 지식을 대체할지 정하세요(일괄 승인에서는 기본으로 빠져 있습니다).</div>` : ''}
+      ${j.merged ? `<div class="xs muted">여러 구간에서 나온 같은 업무 초안 ${j.merged}건을 하나로 합쳤습니다.</div>` : ''}
+      ${drafts.length && !running ? `<div class="row">
+        <span class="xs muted">제목을 누르면 초안을 하나씩 확인·수정할 수 있습니다.</span>
+        <button class="btn primary" id="impApprove" style="margin-left:auto" ${canApprove ? '' : 'disabled title="승인 권한이 없습니다"'}>${icon('check')} 선택한 초안 승인</button></div>` : ''}
+    </div></div>`;
+  ed.querySelectorAll('[data-view]').forEach((a) => a.onclick = (e) => { e.preventDefault(); loadDraft(root, app, a.dataset.view); });
+  ed.querySelector('#impRetry')?.addEventListener('click', async () => {
+    try { IMP.job = await api(`/api/learn/import/${j.id}/retry`, { method: 'POST' }); renderImportPanel(root, app); poll(root, app); } catch (e) { toast(e.message, 'err'); }
+  });
+  ed.querySelector('#impApprove')?.addEventListener('click', async (e) => {
+    const ids = [...ed.querySelectorAll('[data-pick]')].filter((c) => c.checked).map((c) => c.dataset.pick);
+    if (!ids.length) return toast('승인할 초안을 선택해 주세요', 'err');
+    e.target.disabled = true;
+    e.target.innerHTML = '<span class="spinner"></span> 승인 중';
+    try {
+      const r = await api('/api/learn/approve-many', { body: { ids, note: `문서 일괄 학습(${j.title}) 일괄 승인` } });
+      toast(`${r.approved.length}건을 지식 DB에 반영했습니다.${r.newConflicts.length ? ` 새 충돌 ${r.newConflicts.length}건은 충돌 화면에서 확인하세요.` : ''}`, 'ok');
+      IMP.job = await api(`/api/learn/import/${j.id}`);
+      renderImportPanel(root, app);
+      renderImportStatus(root, app);
+      loadDrafts(root, app);
+      app.refreshMe?.();
+    } catch (err) { toast(err.message, 'err'); e.target.disabled = false; }
+  });
 }

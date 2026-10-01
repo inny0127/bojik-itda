@@ -1,5 +1,5 @@
 // 지식그래프 탐색: 힘-방향 레이아웃(SVG), 유형 필터, 검색, 노드 상세·출처 추적
-import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=3b0604e9a8';
+import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=41a5f785c8';
 
 export async function render(root, app) {
   const g = await api('/api/graph');

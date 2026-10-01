@@ -1,5 +1,5 @@
 // 시스템 구성: 아키텍처, 인수인계 온톨로지, 충돌 규칙, 운용 모드
-import { api, esc } from '../util.js?v=3b0604e9a8';
+import { api, esc } from '../util.js?v=41a5f785c8';
 
 export async function render(root) {
   const s = await api('/api/system');
@@ -12,7 +12,7 @@ export async function render(root) {
   <div class="card" style="margin-bottom:16px"><div class="card-h"><h3>처리 흐름</h3><span class="sub">학습 · 질문 · 충돌</span></div>
     <div class="card-b arch">
       <div class="arch-row" style="grid-template-columns: repeat(3, 1fr)">
-        <div class="arch-box hl"><h4>학습</h4><p>자연어 입력 → 비밀번호·개인 연락처 가림 → 입력 판별(질문·잡담 제외)·업무별 구조화 → 기존 지식과 비교해 개정안·덧붙임·중복·신규 판단 → 추가 질문 답변 반영 → 충돌 사전검증 → 승인 시에만 DB 반영, 모든 단계 이력 기록</p></div>
+        <div class="arch-box hl"><h4>학습</h4><p>자연어 입력 → 비밀번호·개인 연락처 가림 → 입력 판별(질문·잡담 제외)·업무별 구조화 → 기존 지식과 비교해 개정안·덧붙임·중복·신규 판단 → 추가 질문 답변 반영 → 충돌 사전검증 → 승인 시에만 DB 반영, 모든 단계 이력 기록. 인수인계서 등 긴 문서(PDF·DOCX·HWPX)는 브라우저에서 글자만 추출 → 제목 기준 구간 분할 → 구간별 동시 구조화 → 같은 업무 초안 합치기 → 일괄 승인(원문은 보직 문서로 저장)</p></div>
         <div class="arch-box hl"><h4>질문</h4><p>로그인 사용자 권한 범위 계산 → 권한 밖 문서·지식 검색 전 제외 → 한국어 bigram BM25 검색 → 지식그래프 이웃 확장 → 근거·출처만 LLM에 전달</p></div>
         <div class="arch-box hl"><h4>충돌</h4><p>같은 업무의 지식끼리, 상위 규정의 구조화 사실과 규칙 기반 비교(C01~C09) → AI 분석(원인·위험·재검토 질문) → 대체·조건 분리·예외 인정 결정 기록</p></div>
       </div>
