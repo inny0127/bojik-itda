@@ -1,4 +1,4 @@
-import{a as i}from"./chunk-6KQUJA2N.js";var c=()=>{},N=()=>!1,_=T=>String(T).replace(/\/[^/]*$/,"")||"/",n=(...T)=>T.join("/").replace(/\/+/g,"/"),p=n,s=T=>{try{return new URL(T).pathname}catch{return String(T)}},t={mkdirSync:c,existsSync:N,dirname:_,join:n,resolve:p};var I=t.dirname(s(import.meta.url)),L=process.env.BOJIK_DATA_DIR||t.join(I,"..","data"),A=process.env.BOJIK_DB||t.join(L,"bojik.db"),R=`
+import{a as i}from"./chunk-REPC4UIS.js";var c=()=>{},N=()=>!1,_=T=>String(T).replace(/\/[^/]*$/,"")||"/",n=(...T)=>T.join("/").replace(/\/+/g,"/"),p=n,s=T=>{try{return new URL(T).pathname}catch{return String(T)}},t={mkdirSync:c,existsSync:N,dirname:_,join:n,resolve:p};var I=t.dirname(s(import.meta.url)),L=process.env.BOJIK_DATA_DIR||t.join(I,"..","data"),A=process.env.BOJIK_DB||t.join(L,"bojik.db"),R=`
 CREATE TABLE IF NOT EXISTS units (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, short TEXT, parent_id TEXT, level TEXT
 );
