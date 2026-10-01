@@ -1,5 +1,5 @@
 // 규정·문서: 권한 범위 문서 목록/열람/등록 (권한 밖 문서는 목록에도 노출하지 않음)
-import { api, esc, modal, toast, icon } from '../util.js?v=9789aa7ca9';
+import { api, esc, modal, toast, icon } from '../util.js?v=beb39f2588';
 
 const TYPE = { regulation: '규정', manual: '매뉴얼', directive: '지휘관 지시·지침', handover: '인수인계 문서', record: '업무 기록' };
 const SCOPE = { common: ['군 공통', 'b-gray'], unit: ['부대', 'b-amber'], position: ['보직', 'b-brand'] };

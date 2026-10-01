@@ -1,6 +1,6 @@
 // 지식그래프 탐색: 방사형 배치(SVG), 유형 필터, 검색, 노드 상세·출처 추적
 // 물리 시뮬레이션 없이 한 번에 좌표를 계산(O(노드+관계))해 바로 그림 — 업무는 바깥 원, 업무 전용 항목(절차·주의 등)은 그 바깥, 여러 업무가 함께 쓰는 체계·규정은 안쪽 원
-import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=9789aa7ca9';
+import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=beb39f2588';
 
 export async function render(root, app) {
   const g = await api('/api/graph');

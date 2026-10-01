@@ -1,7 +1,7 @@
 // 학습: 자연어 입력 → AI 구조화 제안 → 사용자 수정 → 충돌 사전검증 → 승인/거부
-import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=9789aa7ca9';
-import { readDocument, ACCEPT } from '../docread.js?v=9789aa7ca9';
-import { openDoc } from './docs.js?v=9789aa7ca9';
+import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=beb39f2588';
+import { readDocument, ACCEPT } from '../docread.js?v=beb39f2588';
+import { openDoc } from './docs.js?v=beb39f2588';
 
 const SAMPLE = { url: 'samples/handover-sample-v8.pdf', name: '수송계원_인수인계서_v8_예시.pdf' };
 
@@ -646,6 +646,9 @@ function renderImportPanel(root, app) {
   const drafts = j.items.filter((it) => it.status === 'draft');
   const nNew = j.items.filter((it) => it.kind === 'new').length, nRev = j.items.filter((it) => it.kind === 'revision').length;
   const nDiff = j.items.filter((it) => it.kind === 'differs').length;
+  // 절차·주의사항 없이 되묻는 질문만 남은 초안은 내용을 채운 뒤 승인하도록 일괄 승인에서 기본으로 뺌
+  const thin = (it) => it.status === 'draft' && !it.steps && !it.cautions && it.followups > 0;
+  const nThin = j.items.filter(thin).length;
   const KIND = { new: ['신규', 'b-blue'], revision: ['개정', 'b-amber'], differs: ['내용 다름', 'b-red'] };
   const pct = j.total ? Math.round((j.done / j.total) * 100) : 0;
   const running = j.status === 'running';
@@ -667,13 +670,14 @@ function renderImportPanel(root, app) {
       ${j.failed && !running ? `<div class="precheck bad small row">응답을 받지 못한 구간 ${j.failed}개<button class="btn sm" id="impRetry" style="margin-left:auto">${icon('refresh')} 다시 시도</button></div>` : ''}
       ${j.items.length ? `<div class="imp-list">${j.items.map((it) => `
         <div class="imp-item ${it.status !== 'draft' ? 'done' : ''}">
-          ${it.status === 'draft' ? `<input type="checkbox" data-pick="${esc(it.id)}" ${prevSel.has(it.id) || (it.kind === 'differs' && !IMP.touched?.has(it.id)) ? '' : 'checked'}>` : `<span class="badge ${it.status === 'active' ? 'b-green' : 'b-gray'}">${it.status === 'active' ? '승인됨' : STATUS[it.status]?.[0] || it.status}</span>`}
-          <span class="badge ${KIND[it.kind][1]}">${it.kind === 'revision' ? `개정 v${it.version}` : KIND[it.kind][0]}</span>
+          ${it.status === 'draft' ? `<input type="checkbox" data-pick="${esc(it.id)}" ${prevSel.has(it.id) || ((it.kind === 'differs' || thin(it)) && !IMP.touched?.has(it.id)) ? '' : 'checked'}>` : `<span class="badge ${it.status === 'active' ? 'b-green' : 'b-gray'}">${it.status === 'active' ? '승인됨' : STATUS[it.status]?.[0] || it.status}</span>`}
+          <span class="badge ${KIND[it.kind][1]}">${it.kind === 'revision' ? `개정 v${it.version}` : KIND[it.kind][0]}</span>${thin(it) ? '<span class="badge b-gray">보완 필요</span>' : ''}
           <a href="#" data-view="${esc(it.id)}" class="small"><b>${esc(it.title)}</b></a>
           <span class="xs muted imp-meta">${it.cycle ? `${esc(it.cycle)} · ` : ''}절차 ${it.steps} · 주의 ${it.cautions}${it.followups ? ` · 질문 ${it.followups}` : ''} · ${esc(it.pages)}</span>
         </div>`).join('')}</div>` : `<div class="muted small">${running ? '찾은 업무가 여기에 차례로 표시됩니다.' : '새로 만들 초안이 없습니다.'}</div>`}
       ${j.skipped.length ? `<details class="small"><summary class="muted">이미 등록된 내용과 같아 건너뜀 ${j.skipped.length}건</summary><div class="xs muted" style="margin-top:6px">${j.skipped.map((k) => `${esc(k.title)} (${esc(k.pages)})`).join(' · ')}</div></details>` : ''}
       ${nDiff ? `<div class="xs muted">'내용 다름'은 같은 업무의 기존 지식과 다른 내용이 적혀 있는 초안입니다. 제목을 눌러 비교한 뒤 기존 지식을 대체할지 정하세요(일괄 승인에서는 기본으로 빠져 있습니다).</div>` : ''}
+      ${nThin ? `<div class="xs muted">'보완 필요'는 절차·주의사항 없이 확인할 질문만 남은 초안입니다. 제목을 눌러 내용을 채운 뒤 승인하세요(일괄 승인에서는 기본으로 빠져 있습니다).</div>` : ''}
       ${j.merged ? `<div class="xs muted">여러 구간에서 나온 같은 업무 초안 ${j.merged}건을 하나로 합쳤습니다.</div>` : ''}
       ${drafts.length && !running ? `<div class="row">
         <span class="xs muted">제목을 누르면 초안을 하나씩 확인·수정할 수 있습니다.</span>

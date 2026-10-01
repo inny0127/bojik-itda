@@ -1,5 +1,5 @@
 // 충돌: 상충 지식 목록 · 근거 비교 · AI 분석 · 해결(대체/조건 분리/예외 인정)
-import { api, esc, toast, icon, fmtDate, SEV, STATUS, badge, person, CYCLE } from '../util.js?v=9789aa7ca9';
+import { api, esc, toast, icon, fmtDate, SEV, STATUS, badge, person, CYCLE } from '../util.js?v=beb39f2588';
 
 let filter = 'open';
 let selected = null;
