@@ -1,5 +1,5 @@
 // 시스템 구성: 아키텍처, 인수인계 온톨로지, 충돌 규칙, 운용 모드
-import { api, esc } from '../util.js?v=41a5f785c8';
+import { api, esc } from '../util.js?v=ba02ddfac8';
 
 export async function render(root) {
   const s = await api('/api/system');

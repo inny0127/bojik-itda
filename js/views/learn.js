@@ -1,6 +1,6 @@
 // 학습: 자연어 입력 → AI 구조화 제안 → 사용자 수정 → 충돌 사전검증 → 승인/거부
-import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=41a5f785c8';
-import { readDocument, ACCEPT } from '../docread.js?v=41a5f785c8';
+import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=ba02ddfac8';
+import { readDocument, ACCEPT } from '../docread.js?v=ba02ddfac8';
 
 const SAMPLE = { url: 'samples/handover-sample-v8.pdf', name: '수송계원_인수인계서_v8_예시.pdf' };
 
@@ -38,6 +38,19 @@ export async function render(root, app, arg) {
   <div class="learn-grid">
     <div class="col" style="gap:16px">
       <div class="card">
+        <div class="card-h"><h3>문서로 한꺼번에 학습</h3><span class="sub">인수인계서·업무 노트·지침</span></div>
+        <div class="card-b col" style="gap:10px">
+          <label class="drop ${canWrite ? '' : 'off'}" id="impDrop">
+            <input type="file" id="impFile" accept="${ACCEPT}" hidden ${canWrite ? '' : 'disabled'}>
+            ${icon('doc', 'width="22" height="22"')}
+            <b class="small">파일을 끌어다 놓거나 눌러서 선택</b>
+            <span class="xs muted">PDF · DOCX · HWPX · TXT — 한글(HWP)은 PDF로 저장해 올리세요</span>
+          </label>
+          <div class="row wrap"><button class="btn sm" id="impSample" ${canWrite ? '' : 'disabled'}>${icon('doc')} 예시 인수인계서(가상)로 해 보기</button></div>
+          <div id="impStatus"></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-h"><h3>업무 내용</h3></div>
         <div class="card-b col" style="gap:10px">
           ${canWrite ? '' : '<div class="precheck bad small">이 보직에 대한 등록 권한이 없습니다.</div>'}
@@ -53,19 +66,6 @@ export async function render(root, app, arg) {
             <span class="muted xs" id="charCount">0자</span>
             <button class="btn primary" id="btnPropose" style="margin-left:auto" ${canWrite ? '' : 'disabled'}>${icon('spark')} AI 구조화</button>
           </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><h3>문서로 한꺼번에 학습</h3><span class="sub">인수인계서·업무 노트·지침</span></div>
-        <div class="card-b col" style="gap:10px">
-          <label class="drop ${canWrite ? '' : 'off'}" id="impDrop">
-            <input type="file" id="impFile" accept="${ACCEPT}" hidden ${canWrite ? '' : 'disabled'}>
-            ${icon('doc', 'width="22" height="22"')}
-            <b class="small">파일을 끌어다 놓거나 눌러서 선택</b>
-            <span class="xs muted">PDF · DOCX · HWPX · TXT — 한글(HWP)은 PDF로 저장해 올리세요</span>
-          </label>
-          <div class="row wrap"><button class="btn sm" id="impSample" ${canWrite ? '' : 'disabled'}>${icon('doc')} 예시 인수인계서(가상)로 해 보기</button></div>
-          <div id="impStatus"></div>
         </div>
       </div>
       <div class="card">
@@ -641,7 +641,7 @@ function renderImportPanel(root, app) {
           ${it.status === 'draft' ? `<input type="checkbox" data-pick="${esc(it.id)}" ${prevSel.has(it.id) || (it.kind === 'differs' && !IMP.touched?.has(it.id)) ? '' : 'checked'}>` : `<span class="badge ${it.status === 'active' ? 'b-green' : 'b-gray'}">${it.status === 'active' ? '승인됨' : STATUS[it.status]?.[0] || it.status}</span>`}
           <span class="badge ${KIND[it.kind][1]}">${it.kind === 'revision' ? `개정 v${it.version}` : KIND[it.kind][0]}</span>
           <a href="#" data-view="${esc(it.id)}" class="small"><b>${esc(it.title)}</b></a>
-          <span class="xs muted" style="margin-left:auto;white-space:nowrap">${it.cycle ? `${esc(it.cycle)} · ` : ''}절차 ${it.steps} · 주의 ${it.cautions}${it.followups ? ` · 질문 ${it.followups}` : ''} · ${esc(it.pages)}</span>
+          <span class="xs muted imp-meta">${it.cycle ? `${esc(it.cycle)} · ` : ''}절차 ${it.steps} · 주의 ${it.cautions}${it.followups ? ` · 질문 ${it.followups}` : ''} · ${esc(it.pages)}</span>
         </div>`).join('')}</div>` : `<div class="muted small">${running ? '찾은 업무가 여기에 차례로 표시됩니다.' : '새로 만들 초안이 없습니다.'}</div>`}
       ${j.skipped.length ? `<details class="small"><summary class="muted">이미 등록된 내용과 같아 건너뜀 ${j.skipped.length}건</summary><div class="xs muted" style="margin-top:6px">${j.skipped.map((k) => `${esc(k.title)} (${esc(k.pages)})`).join(' · ')}</div></details>` : ''}
       ${nDiff ? `<div class="xs muted">'내용 다름'은 같은 업무의 기존 지식과 다른 내용이 적혀 있는 초안입니다. 제목을 눌러 비교한 뒤 기존 지식을 대체할지 정하세요(일괄 승인에서는 기본으로 빠져 있습니다).</div>` : ''}
