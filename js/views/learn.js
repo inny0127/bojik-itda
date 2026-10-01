@@ -1,7 +1,7 @@
 // 학습: 자연어 입력 → AI 구조화 제안 → 사용자 수정 → 충돌 사전검증 → 승인/거부
-import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=53868ba833';
-import { readDocument, ACCEPT } from '../docread.js?v=53868ba833';
-import { openDoc } from './docs.js?v=53868ba833';
+import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=20ebcc3e92';
+import { readDocument, ACCEPT } from '../docread.js?v=20ebcc3e92';
+import { openDoc } from './docs.js?v=20ebcc3e92';
 
 const SAMPLE = { url: 'samples/handover-sample-v8.pdf', name: '수송계원_인수인계서_v8_예시.pdf' };
 
@@ -691,7 +691,8 @@ function renderImportPanel(root, app) {
     e.target.innerHTML = '<span class="spinner"></span> 승인 중';
     try {
       const r = await api('/api/learn/approve-many', { body: { ids, note: `문서 일괄 학습(${j.title}) 일괄 승인` } });
-      toast(`${r.approved.length}건을 지식 DB에 반영했습니다.${r.newConflicts.length ? ` 새 충돌 ${r.newConflicts.length}건은 충돌 화면에서 확인하세요.` : ''}`, 'ok');
+      const fresh = r.newConflicts.filter((c) => !c.inherited).length, kept = r.newConflicts.length - fresh;
+      toast(`${r.approved.length}건을 지식 DB에 반영했습니다.${fresh ? ` 새 충돌 ${fresh}건은 충돌 화면에서 확인하세요.` : ''}${kept ? ` 개정 전 지식에 있던 충돌 ${kept}건은 새 버전으로 이어집니다.` : ''}`, 'ok');
       IMP.job = await api(`/api/learn/import/${j.id}`);
       renderImportPanel(root, app);
       renderImportStatus(root, app);

@@ -1,15 +1,15 @@
 // 보직잇다 SPA 셸: 인증, 라우팅, 보직 공간 전환
-import { api, esc, $, icon, toast, dday } from './util.js?v=53868ba833';
-import * as login from './views/login.js?v=53868ba833';
-import * as dashboard from './views/dashboard.js?v=53868ba833';
-import * as learn from './views/learn.js?v=53868ba833';
-import * as ask from './views/ask.js?v=53868ba833';
-import * as conflicts from './views/conflicts.js?v=53868ba833';
-import * as graph from './views/graph.js?v=53868ba833';
-import * as knowledge from './views/knowledge.js?v=53868ba833';
-import * as docs from './views/docs.js?v=53868ba833';
-import * as admin from './views/admin.js?v=53868ba833';
-import * as system from './views/system.js?v=53868ba833';
+import { api, esc, $, icon, toast, dday } from './util.js?v=20ebcc3e92';
+import * as login from './views/login.js?v=20ebcc3e92';
+import * as dashboard from './views/dashboard.js?v=20ebcc3e92';
+import * as learn from './views/learn.js?v=20ebcc3e92';
+import * as ask from './views/ask.js?v=20ebcc3e92';
+import * as conflicts from './views/conflicts.js?v=20ebcc3e92';
+import * as graph from './views/graph.js?v=20ebcc3e92';
+import * as knowledge from './views/knowledge.js?v=20ebcc3e92';
+import * as docs from './views/docs.js?v=20ebcc3e92';
+import * as admin from './views/admin.js?v=20ebcc3e92';
+import * as system from './views/system.js?v=20ebcc3e92';
 
 const ROUTES = {
   dashboard: { view: dashboard, label: '대시보드', icon: 'home' },
@@ -122,11 +122,18 @@ async function route() {
     return;
   }
   renderChrome();
-  const view = $('#view');
+  // 화면마다 새 컨테이너: 이전 화면의 늦게 끝난 비동기 작업(데이터 불러오기·폴링)이 새 화면을 덮어쓰지 않고
+  // 화면에서 떨어진 이전 컨테이너에만 반영되도록 함
+  const main = $('#view');
+  const view = document.createElement('div');
+  view.className = 'view-root';
+  main.replaceChildren(view);
   view.innerHTML = '<div class="row muted"><span class="spinner dark"></span> 불러오는 중…</div>';
-  view.scrollTop = 0;
+  main.scrollTop = 0;
   try {
-    currentCleanup = (await def.view.render(view, app, arg)) || null;
+    const cleanup = (await def.view.render(view, app, arg)) || null;
+    if (view.isConnected) currentCleanup = cleanup;
+    else if (cleanup) { try { cleanup(); } catch { /* noop */ } } // 그사이 다른 화면으로 이동했으면 바로 정리
   } catch (e) {
     view.innerHTML = `<div class="card card-b"><b>화면을 불러오지 못했습니다.</b><p class="muted">${esc(e.message)}</p></div>`;
   }

@@ -1,5 +1,5 @@
 // 접근통제·감사: 부대/보직/사용자 권한 구조, 권한 위임, 접근 기록 (체계관리자 전용 — 업무 지식 열람 불가)
-import { api, esc, toast, fmtDate, icon } from '../util.js?v=53868ba833';
+import { api, esc, toast, fmtDate, icon } from '../util.js?v=20ebcc3e92';
 
 const ACT = { handover: '보직자 교대', holder_incoming: '인수자 등록', login: '로그인', switch_position: '보직 공간 전환', ask: '질문(검색)', learn_propose: '학습 제안', learn_approve: '지식 승인', conflict_resolve: '충돌 해결', doc_read: '문서 열람', doc_create: '문서 등록', grant: '권한 부여', revoke: '권한 회수', admin: '관리 기능' };
 
