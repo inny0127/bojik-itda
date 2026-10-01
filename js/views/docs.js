@@ -1,5 +1,5 @@
 // 규정·문서: 권한 범위 문서 목록/열람/등록 (권한 밖 문서는 목록에도 노출하지 않음)
-import { api, esc, modal, toast, icon } from '../util.js?v=607d489f1e';
+import { api, esc, modal, toast, icon } from '../util.js?v=c03d6b5395';
 
 const TYPE = { regulation: '규정', manual: '매뉴얼', directive: '지휘관 지시·지침', handover: '인수인계 문서', record: '업무 기록' };
 const SCOPE = { common: ['군 공통', 'b-gray'], unit: ['부대', 'b-amber'], position: ['보직', 'b-brand'] };
@@ -16,7 +16,7 @@ export async function render(root, app, arg) {
   <div class="card card-b row" style="margin-bottom:16px;background:#f8fafc">${icon('lock', 'width="18" height="18"')}
     <span class="small">현재 공간 <b>${esc(app.me.active?.name || '')}</b>에서 열람 가능한 문서 <b>${documents.filter((d) => d.status === 'active').length}건</b>(검색 대상 조문·절 ${documents.filter((d) => d.status === 'active').reduce((n, d) => n + d.chunks, 0).toLocaleString('ko-KR')}개).
     권한 밖 문서 ${hiddenN}건(${Object.entries(hidden).map(([k, v]) => `${k} ${v}`).join(', ') || '없음'})은 제목조차 노출되지 않으며 검색에서도 제외됩니다.</span></div>
-  <div class="card"><table class="table"><thead><tr><th>문서</th><th style="width:110px">범위</th><th style="width:130px">유형</th><th style="width:120px">판·호</th><th style="width:110px">시행일</th><th style="width:70px">절</th></tr></thead><tbody>
+  <div class="card"><table class="table doc-table"><thead><tr><th>문서</th><th style="width:110px">범위</th><th style="width:130px">유형</th><th style="width:120px">판·호</th><th style="width:110px">시행일</th><th style="width:70px">절</th></tr></thead><tbody>
     ${documents.map((d) => `<tr data-doc="${esc(d.id)}" style="cursor:pointer;${d.status !== 'active' ? 'opacity:.55' : ''}"><td><b>${esc(d.title)}</b>${d.status !== 'active' ? ' <span class="badge b-gray">폐지·대체됨 (검색 제외)</span>' : ''}<div class="xs muted">${esc(d.summary || '')}</div></td>
       <td><span class="badge ${SCOPE[d.scope][1]}">${SCOPE[d.scope][0]}</span><div class="xs muted">${esc(d.access)}</div></td><td class="small">${TYPE[d.doc_type] || d.doc_type}</td><td class="small">${esc(d.version || '-')}</td><td class="small">${esc(d.effective_date || '-')}</td><td class="small">${d.chunks}</td></tr>`).join('')}
   </tbody></table></div>`;

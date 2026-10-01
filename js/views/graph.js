@@ -1,6 +1,6 @@
 // 지식그래프 탐색: 방사형 배치(SVG), 유형 필터, 검색, 노드 상세·출처 추적
 // 물리 시뮬레이션 없이 한 번에 좌표를 계산(O(노드+관계))해 바로 그림 — 업무는 바깥 원, 업무 전용 항목(절차·주의 등)은 그 바깥, 여러 업무가 함께 쓰는 체계·규정은 안쪽 원
-import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=607d489f1e';
+import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=c03d6b5395';
 
 export async function render(root, app) {
   const g = await api('/api/graph');
@@ -25,7 +25,7 @@ export async function render(root, app) {
       <div class="sep" style="margin:4px 0"></div>
       <div class="xs muted"><span style="color:var(--red)">- - -</span> 미해결 충돌</div>
     </div>
-    <div class="card graph-canvas"><svg id="gsvg"></svg><div class="hint">드래그로 이동, 휠로 확대·축소 · <a href="#" id="gfit">전체 보기</a></div></div>
+    <div class="card graph-canvas"><svg id="gsvg"></svg><div class="hint"><span class="d-hint">드래그로 이동, 휠로 확대·축소</span><span class="m-hint">한 손가락으로 이동, 두 손가락으로 확대·축소</span> · <a href="#" id="gfit">전체 보기</a></div></div>
     <div class="card" style="overflow:auto"><div class="card-h"><h3>노드 상세</h3></div><div class="card-b" id="ginfo"><div class="muted small">노드를 선택하세요.</div></div></div>
   </div>`;
 
@@ -235,6 +235,43 @@ export async function render(root, app) {
     view.x = mx - ((mx - view.x) * k2) / view.k; view.y = my - ((my - view.y) * k2) / view.k; view.k = k2;
     paint();
   }, { passive: false });
+  // 터치(휴대폰·태블릿): 한 손가락으로 이동·노드 옮기기, 두 손가락으로 확대·축소, 짧게 누르면 선택
+  let touch = null;
+  const twoFinger = (e) => { const [a, b] = e.touches; return { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 }; };
+  svg.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (e.touches.length >= 2) { const f = twoFinger(e); touch = { pinch: f.d, cx: f.x, cy: f.y, k: view.k, vx: view.x, vy: view.y, moved: true }; return; }
+    const t = e.touches[0];
+    const nodeEl = e.target.closest('.g-node');
+    touch = { node: nodeEl?.dataset.id || null, sx: t.clientX, sy: t.clientY, px: t.clientX - view.x, py: t.clientY - view.y, moved: false };
+  }, { passive: false });
+  svg.addEventListener('touchmove', (e) => {
+    if (!touch) return;
+    e.preventDefault();
+    if (touch.pinch && e.touches.length >= 2) {
+      const f = twoFinger(e);
+      const r = svg.getBoundingClientRect();
+      const mx = touch.cx - r.left, my = touch.cy - r.top;
+      const k2 = Math.min(3, Math.max(0.3, (touch.k * f.d) / touch.pinch));
+      view.x = mx - ((mx - touch.vx) * k2) / touch.k + (f.x - touch.cx); view.y = my - ((my - touch.vy) * k2) / touch.k + (f.y - touch.cy); view.k = k2;
+      paint();
+      return;
+    }
+    if (touch.pinch) return;
+    const t = e.touches[0];
+    if (!touch.moved && Math.hypot(t.clientX - touch.sx, t.clientY - touch.sy) < 6) return;
+    touch.moved = true;
+    if (touch.node) {
+      const p = pt(t); const n = byId.get(touch.node); n.x = p.x; n.y = p.y;
+      nodeEls.find(([, m]) => m === n)?.[0].setAttribute('transform', `translate(${n.x},${n.y})`);
+      for (const x of edgesOf.get(n.id) || []) drawEdge(x);
+    } else { view.x = t.clientX - touch.px; view.y = t.clientY - touch.py; paint(); }
+  }, { passive: false });
+  svg.addEventListener('touchend', (e) => {
+    if (!touch || e.touches.length) return;
+    if (!touch.moved) select(touch.node);
+    touch = null;
+  });
   root.querySelectorAll('.legend-item').forEach((el) => el.onclick = () => {
     const t = el.dataset.t;
     if (hidden.has(t)) hidden.delete(t); else hidden.add(t);

@@ -1,15 +1,15 @@
 // 보직잇다 SPA 셸: 인증, 라우팅, 보직 공간 전환
-import { api, esc, $, icon, toast, dday } from './util.js?v=607d489f1e';
-import * as login from './views/login.js?v=607d489f1e';
-import * as dashboard from './views/dashboard.js?v=607d489f1e';
-import * as learn from './views/learn.js?v=607d489f1e';
-import * as ask from './views/ask.js?v=607d489f1e';
-import * as conflicts from './views/conflicts.js?v=607d489f1e';
-import * as graph from './views/graph.js?v=607d489f1e';
-import * as knowledge from './views/knowledge.js?v=607d489f1e';
-import * as docs from './views/docs.js?v=607d489f1e';
-import * as admin from './views/admin.js?v=607d489f1e';
-import * as system from './views/system.js?v=607d489f1e';
+import { api, esc, $, icon, toast, dday } from './util.js?v=c03d6b5395';
+import * as login from './views/login.js?v=c03d6b5395';
+import * as dashboard from './views/dashboard.js?v=c03d6b5395';
+import * as learn from './views/learn.js?v=c03d6b5395';
+import * as ask from './views/ask.js?v=c03d6b5395';
+import * as conflicts from './views/conflicts.js?v=c03d6b5395';
+import * as graph from './views/graph.js?v=c03d6b5395';
+import * as knowledge from './views/knowledge.js?v=c03d6b5395';
+import * as docs from './views/docs.js?v=c03d6b5395';
+import * as admin from './views/admin.js?v=c03d6b5395';
+import * as system from './views/system.js?v=c03d6b5395';
 
 const ROUTES = {
   dashboard: { view: dashboard, label: '대시보드', icon: 'home' },
@@ -46,10 +46,12 @@ function shell() {
     <aside class="sidebar">
       <div class="brand"><div class="brand-name">보직잇다</div></div>
       <nav class="nav" id="nav"></nav>
+      <button class="nav-more" id="navMore" type="button" aria-label="메뉴 더보기">${icon('list')}<span>더보기</span></button>
       <div class="nav-foot" id="navfoot"></div>
     </aside>
     <div class="main">
       <header class="topbar">
+        <div class="m-brand">보직잇다</div>
         <div class="pos-switch"><label for="posSel">보직</label><select id="posSel"></select></div>
         <span id="llmChip"></span>
         <div class="spacer"></div>
@@ -58,8 +60,14 @@ function shell() {
       </header>
       <main class="content" id="view"></main>
     </div>
+    <div class="m-sheet-bg" id="mSheetBg"></div>
+    <div class="m-sheet" id="mSheet"></div>
   </div>`;
   $('#logout').onclick = async () => { await api('/api/logout', { method: 'POST' }); state.me = null; location.hash = '#/login'; };
+  // 휴대폰: 아래 탭 막대의 '더보기'로 나머지 메뉴·보직 정보를 엶 (데스크톱에서는 이 요소들이 보이지 않음)
+  $('#navMore').onclick = () => $('.shell').classList.toggle('m-open');
+  $('#mSheetBg').onclick = closeSheet;
+  $('#mSheet').onclick = (e) => { if (e.target.closest('a')) closeSheet(); };
   $('#posSel').onchange = async (e) => {
     try {
       await api('/api/me/position', { body: { positionId: e.target.value } });
@@ -70,21 +78,29 @@ function shell() {
   };
 }
 
+const closeSheet = () => $('.shell')?.classList.remove('m-open');
+
 function renderChrome() {
   const me = state.me;
   if (!me || !$('#nav')) return;
   const { route: cur } = parseHash();
   const isAdmin = me.user.role === 'admin';
   const items = Object.entries(ROUTES).filter(([k]) => (isAdmin ? ['admin', 'system'].includes(k) : k !== 'admin'));
+  // 휴대폰 아래 탭 막대에는 앞 4개 메뉴만, 나머지는 '더보기'에 (m-sec)
+  const ORDER = ['dashboard', 'learn', 'ask', 'conflicts', 'graph', 'knowledge', 'docs', 'admin', 'system'];
+  const secondary = ORDER.filter((k) => items.some(([x]) => x === k)).slice(4);
+  const link = ([k, r]) => {
+    const count = k === 'conflicts' && me.openConflicts ? `<span class="count">${me.openConflicts}</span>` : k === 'learn' && me.drafts ? `<span class="count soft">${me.drafts}</span>` : '';
+    return `<a href="#/${k}" class="${[cur === k ? 'active' : '', secondary.includes(k) ? 'm-sec' : ''].filter(Boolean).join(' ')}">${icon(r.icon)}<span>${r.label}</span>${count}</a>`;
+  };
   const section = (label, keys) => {
     const list = items.filter(([k]) => keys.includes(k));
     if (!list.length) return '';
-    return (label ? `<div class="nav-sec">${label}</div>` : '') + list.map(([k, r]) => {
-      const count = k === 'conflicts' && me.openConflicts ? `<span class="count">${me.openConflicts}</span>` : k === 'learn' && me.drafts ? `<span class="count soft">${me.drafts}</span>` : '';
-      return `<a href="#/${k}" class="${cur === k ? 'active' : ''}">${icon(r.icon)}<span>${r.label}</span>${count}</a>`;
-    }).join('');
+    return (label ? `<div class="nav-sec">${label}</div>` : '') + list.map(link).join('');
   };
   $('#nav').innerHTML = section('', ['dashboard']) + section('업무', ['learn', 'ask', 'conflicts']) + section('지식', ['graph', 'knowledge', 'docs']) + section('관리', ['admin', 'system']);
+  $('#navMore').classList.toggle('none', !secondary.length);
+  $('#navMore').classList.toggle('on', secondary.includes(cur));
   $('#navfoot').innerHTML = (me.active
     ? `<b>${esc(me.active.name)}</b><br>${esc((me.active.units || []).slice().reverse().join(' › '))}<br>권한: ${me.active.perms.map((p) => ({ read: '열람', write: '등록', approve: '승인' }[p])).join(', ')}`
     : '업무 지식 열람 권한 없음') + '<div style="margin-top:8px">시연용 가상 데이터</div>';
@@ -100,6 +116,10 @@ function renderChrome() {
   const h = u.holder;
   const conscript = h && /(이병|일병|상병|병장)/.test(h.rank);
   $('#userbox').innerHTML = `<div><div class="nm">${esc(u.seat_name)}</div><div class="rl">${h ? `${esc(h.rank)} ${esc(h.name)}${conscript && h.tenure_end ? ` (전역 ${dday(h.tenure_end)})` : ''}` : '보직자 없음'}${u.incoming ? ` · 인수 예정 ${esc(u.incoming.rank)} ${esc(u.incoming.name)}` : ''}</div></div>`;
+  $('#mSheet').innerHTML = `${secondary.length ? `<div class="m-links">${items.filter(([k]) => secondary.includes(k)).map(([k, r]) => `<a href="#/${k}" class="${cur === k ? 'active' : ''}">${icon(r.icon)}<span>${r.label}</span></a>`).join('')}</div>` : ''}
+    <div class="m-info">${$('#userbox').innerHTML}
+      ${me.active ? `<div class="xs muted">${esc((me.active.units || []).slice().reverse().join(' › '))}<br>권한: ${me.active.perms.map((p) => ({ read: '열람', write: '등록', approve: '승인' }[p])).join(', ')}</div>` : ''}
+      <div class="xs muted" style="margin-top:6px">시연용 가상 데이터</div></div>`;
 }
 
 let currentCleanup = null;
@@ -107,6 +127,7 @@ async function route() {
   const { route: r, arg } = parseHash();
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
   if (currentCleanup) { try { currentCleanup(); } catch { /* noop */ } currentCleanup = null; }
+  closeSheet();
   if (r === 'login') {
     state.me = null;
     login.render($('#app'), app);
@@ -130,6 +151,7 @@ async function route() {
   main.replaceChildren(view);
   view.innerHTML = '<div class="row muted"><span class="spinner dark"></span> 불러오는 중…</div>';
   main.scrollTop = 0;
+  if (window.scrollY) window.scrollTo(0, 0); // 휴대폰은 화면 전체가 스크롤됨
   try {
     const cleanup = (await def.view.render(view, app, arg)) || null;
     if (view.isConnected) currentCleanup = cleanup;

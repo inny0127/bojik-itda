@@ -436,3 +436,134 @@ code { font-family: inherit; font-size: 12px; font-weight: 600; background: #f0f
 .imp-item .imp-meta { flex: 1 1 0; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .learn-grid > * { min-width: 0; }
 @media (max-width: 700px) { .imp-stats { grid-template-columns: repeat(2, 1fr); } .imp-item { flex-wrap: wrap; } }
+
+/* ---------- 휴대폰 (폭 640px 이하) ----------
+   데스크톱·태블릿 화면은 그대로 두고 휴대폰에서만: 위쪽 한 줄 머리막대, 아래쪽 탭 막대(주요 4개 + 더보기),
+   표·여러 칸 화면은 한 칸으로, 입력칸 글자 16px(아이폰 확대 방지) */
+.m-brand, .nav-more, .m-sheet, .m-sheet-bg, .m-hint { display: none; }
+@media (max-width: 640px) {
+  input, select, textarea, .input, .select, .textarea { font-size: 16px; }
+  .shell { display: block; min-height: 100vh; }
+  .main { min-height: 100vh; }
+
+  /* 머리막대: 이름 · LLM 상태 · 로그아웃 (보직이 여럿일 때만 보직 선택을 둘째 줄에) */
+  .topbar { position: sticky; top: 0; z-index: 40; flex-wrap: wrap; gap: 6px 10px; min-height: 52px; padding: 8px 8px 8px 16px; }
+  .m-brand { display: block; font-weight: 800; font-size: 17px; color: var(--ink); margin-right: auto; }
+  .topbar .spacer, .topbar .userbox { display: none; }
+  .pos-switch { order: 5; width: 100%; padding-right: 8px; }
+  .pos-switch select { flex: 1; min-width: 0; }
+  .pos-switch:has(select:disabled) { display: none; }
+
+  /* 아래 탭 막대 */
+  .sidebar { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 45; flex-direction: row; align-items: stretch; gap: 0; height: auto;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); border-right: none; border-top: 1px solid var(--line); border-bottom: none; overflow: visible; }
+  .sidebar .brand, .sidebar .nav-sec, .sidebar .nav-foot { display: none; }
+  .nav { display: flex; flex: 4; gap: 0; min-width: 0; }
+  .nav a, .nav-more { flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 2px 4px; border-radius: 8px;
+    font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; position: relative; }
+  .nav a svg, .nav-more svg { width: 22px; height: 22px; opacity: 1; }
+  .nav a.m-sec { display: none; }
+  .nav a.active, .nav a.active:hover { background: transparent; color: var(--brand); }
+  .nav a:hover { background: transparent; }
+  .nav .count { position: absolute; top: 1px; left: calc(50% + 7px); margin: 0; font-size: 10px; line-height: 15px; padding: 0 4px; }
+  .nav-more { display: flex; background: none; border: none; cursor: pointer; font-family: inherit; }
+  .nav-more.none { display: none; }
+  .nav-more.on, .shell.m-open .nav-more { color: var(--brand); }
+
+  /* 더보기 시트: 나머지 메뉴 + 보직·보직자 정보 */
+  .m-sheet-bg { display: block; position: fixed; inset: 0; z-index: 43; background: rgba(20, 24, 30, .35); opacity: 0; pointer-events: none; transition: opacity .15s; }
+  .m-sheet { display: block; position: fixed; left: 0; right: 0; bottom: calc(57px + env(safe-area-inset-bottom)); z-index: 44; background: var(--panel);
+    border-radius: 14px 14px 0 0; padding: 10px 12px 14px; box-shadow: 0 -8px 24px rgba(0, 0, 0, .1); transform: translateY(110%); visibility: hidden; transition: transform .18s ease, visibility 0s .18s; }
+  .shell.m-open .m-sheet { transform: none; visibility: visible; transition: transform .18s ease; }
+  .shell.m-open .m-sheet-bg { opacity: 1; pointer-events: auto; }
+  .m-links { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .m-links a { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink-2); font-weight: 600; }
+  .m-links a.active { border-color: #b9d6cc; background: var(--brand-soft); color: var(--brand); }
+  .m-links a svg { width: 20px; height: 20px; flex: none; }
+  .m-info { margin-top: 12px; padding: 10px 4px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .m-info .nm { font-weight: 700; }
+  .m-info .rl { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+
+  /* 본문 */
+  .content { padding: 16px 14px calc(84px + env(safe-area-inset-bottom)); }
+  .page-head { gap: 10px; margin-bottom: 14px; }
+  .page-head h1 { font-size: 19px; }
+  .page-head .actions { margin-left: 0; }
+  .card-h { padding: 10px 14px; }
+  .card-b { padding: 14px; }
+  .grid { gap: 12px; }
+  .grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+  .g4 { grid-template-columns: 1fr 1fr; }
+  .card:has(> .table) { overflow-x: auto; }
+  .table th, .table td { padding: 8px; }
+
+  /* 대시보드: 보직자 이력은 두 칸 카드, 지표는 두 칸 */
+  .hero-card { gap: 12px; padding: 14px; }
+  .lineage { margin-left: 0; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .gen, .gen:first-child, .gen:last-of-type { margin-left: 0; min-width: 0; border-radius: 6px; padding: 7px 10px; }
+  .kpi { padding: 12px 14px; }
+  .kpi .v { font-size: 22px; }
+
+  /* 학습 */
+  .onto-grid { grid-template-columns: minmax(0, 1fr); }
+  .task-grid { grid-template-columns: 1fr 1fr; }
+  .task-grid > .field[style*="span"] { grid-column: 1 / -1 !important; }
+  .steps-row { grid-template-columns: 26px 1fr auto; grid-template-areas: 'o a c' '. s s' '. p p'; }
+  .imp-stats b { font-size: 18px; }
+
+  /* 질문: 대화창이 화면 높이를 채우고 입력칸이 항상 보이도록 */
+  .ask-grid { min-height: 0; }
+  .view-root:has(.ask-grid) .page-head p { display: none; } /* 빈 대화창에 같은 안내가 있으므로 */
+  .ask-grid .chat { height: calc(100vh - 176px); height: calc(100dvh - 176px); min-height: 260px; }
+  .chat-log { padding: 12px; gap: 12px; }
+  .msg.bot .av { display: none; }
+  .bubble { padding: 10px 12px; }
+  .suggests { padding: 0 12px 10px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .suggests::-webkit-scrollbar { display: none; }
+  .suggests .gchip { flex: none; }
+  .chat-input { padding: 10px; }
+
+  /* 지식 목록: 한 건을 세 줄(상태·작성자 / 제목 / 구성)로 */
+  .ku-task > .h { flex-wrap: wrap; padding: 10px 12px; }
+  .ku-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding: 10px 12px; }
+  .ku-line > :nth-child(1) { order: 1; }
+  .ku-line > :nth-child(3) { order: 2; }
+  .ku-line > :nth-child(4) { order: 3; margin-left: auto; }
+  .ku-line > :nth-child(2) { order: 4; flex-basis: 100%; }
+  .ku-line > :nth-child(5) { order: 5; flex-basis: 100%; }
+  .hist-table th:nth-child(4), .hist-table td:nth-child(4) { display: none; }
+
+  /* 충돌: 비교 카드는 위아래로 */
+  #detail { scroll-margin-top: 60px; }
+  .versus { grid-template-columns: 1fr; }
+  .vs-mid { padding: 2px 0; }
+  .ev-pair { grid-template-columns: 1fr; }
+  .ai-box { padding: 12px 14px; }
+
+  /* 지식그래프: 그래프를 먼저, 높이 확보 */
+  .graph-wrap { min-height: 0; }
+  .graph-wrap > .graph-canvas { order: -1; height: 55vh; min-height: 320px; }
+  .graph-canvas svg { touch-action: none; }
+  .d-hint { display: none; }
+  .m-hint { display: inline; }
+
+  /* 규정·문서: 문서명·범위만 (나머지는 문서를 열면 표시) */
+  .doc-table th:nth-child(n+3), .doc-table td:nth-child(n+3) { display: none; }
+
+  /* 시스템 구성: 상자를 한 칸(4개 묶음은 두 칸)으로 */
+  .arch-row { grid-template-columns: 1fr !important; }
+  .arch-row[style*="repeat(4"] { grid-template-columns: 1fr 1fr !important; }
+
+  /* 창·알림 */
+  .modal-bg { padding: 8px; }
+  .modal { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+  .modal-h { padding: 12px 14px; }
+  .modal-b { padding: 14px; }
+  .modal-f { padding: 10px 14px; flex-wrap: wrap; }
+  .toasts { left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .toast { max-width: none; }
+
+  /* 로그인 */
+  .login { padding: 28px 14px 32px; }
+  .login-card { padding: 22px 18px; }
+}

@@ -1,5 +1,5 @@
 // 지식 목록·이력: 업무별 지식단위(여러 세대), 버전·대체 관계, 생성·수정·승인 이력 추적
-import { api, esc, modal, fmtDate, CYCLE, STATUS, ACTION, SEV, badge, person, icon, toast } from '../util.js?v=607d489f1e';
+import { api, esc, modal, fmtDate, CYCLE, STATUS, ACTION, SEV, badge, person, icon, toast } from '../util.js?v=c03d6b5395';
 
 let tab = 'list';
 
@@ -40,7 +40,7 @@ export async function render(root, app, arg) {
           </div>`).join('')}</div>`;
       }).join('') || '<div class="card empty">지식이 없습니다.</div>';
     } else {
-      body.innerHTML = `<div class="card"><table class="table"><thead><tr><th style="width:150px">일시</th><th style="width:120px">행위</th><th>지식</th><th style="width:130px">수행자</th><th>내용</th></tr></thead><tbody>
+      body.innerHTML = `<div class="card"><table class="table hist-table"><thead><tr><th style="width:150px">일시</th><th style="width:120px">행위</th><th>지식</th><th style="width:130px">수행자</th><th>내용</th></tr></thead><tbody>
         ${hist.map((h) => { const a = ACTION[h.action] || [h.action, '#64748b']; return `<tr data-ku="${esc(h.ku_id)}" style="cursor:pointer"><td class="small">${fmtDate(h.at, true)}</td><td><span class="badge" style="background:${a[1]}1a;color:${a[1]}">${a[0]}</span></td>
           <td><b class="small">${esc(h.title)}</b><div class="xs muted mono">${esc(h.ku_id)} v${h.version}</div></td><td class="small">${person(h.actor)}</td>
           <td class="small">${esc(h.note || '')}${h.diff?.length ? `<div class="diff">${h.diff.slice(0, 3).map((d) => `${esc(d.field)}: ${d.from ? `<span class="from">${esc(d.from)}</span> ` : ''}${d.to ? `<span class="to">${esc(d.to)}</span>` : ''}`).join('<br>')}${h.diff.length > 3 ? `<br>외 ${h.diff.length - 3}건` : ''}</div>` : ''}</td></tr>`; }).join('')}

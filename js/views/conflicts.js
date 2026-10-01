@@ -1,5 +1,5 @@
 // 충돌: 상충 지식 목록 · 근거 비교 · AI 분석 · 해결(대체/조건 분리/예외 인정)
-import { api, esc, toast, icon, fmtDate, SEV, STATUS, badge, person, CYCLE } from '../util.js?v=607d489f1e';
+import { api, esc, toast, icon, fmtDate, SEV, STATUS, badge, person, CYCLE } from '../util.js?v=c03d6b5395';
 
 let filter = 'open';
 let selected = null;
@@ -37,20 +37,22 @@ export async function render(root, app, arg) {
     root.querySelectorAll('.cf-item').forEach((it) => it.onclick = () => {
       selected = it.dataset.id;
       root.querySelectorAll('.cf-item').forEach((x) => x.classList.toggle('sel', x === it));
-      showDetail();
+      // 휴대폰은 상세가 목록 아래에 있으므로 상세를 그린 뒤 그 위치로 이동
+      showDetail(() => { if (matchMedia('(max-width: 640px)').matches) root.querySelector('#detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     });
     if (!selected || !list.some((c) => c.id === selected)) {
       selected = shown[0]?.id || null;
       if (selected) root.querySelector(`.cf-item[data-id="${selected}"]`)?.classList.add('sel');
     }
   };
-  const showDetail = async () => {
+  const showDetail = async (onShown) => {
     const el = root.querySelector('#detail');
     if (!selected) { el.innerHTML = '<div class="card card-b empty">충돌을 선택하세요.</div>'; return; }
     el.innerHTML = '<div class="card card-b"><span class="spinner dark"></span></div>';
     const c = await api(`/api/conflicts/${selected}`);
     el.innerHTML = detailHtml(c, canApprove);
     wire(el, c);
+    onShown?.();
     // 내장 분석(초기 데이터, LLM 응답 실패 시 저장된 분석)만 있으면 열었을 때 Luna 분석으로 자동 교체
     if (c.ai_analysis?.engine !== 'llm' && app.me.llm?.mode === 'llm' && !lunaTried.has(c.id)) {
       lunaTried.add(c.id);
@@ -88,7 +90,7 @@ export async function render(root, app, arg) {
       } catch (err) { toast(err.message, 'err'); }
     };
   };
-  root.querySelector('#seg').onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; selected = null; load().then(showDetail); } };
+  root.querySelector('#seg').onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; selected = null; load().then(() => showDetail()); } };
   root.querySelector('#scan').onclick = async (e) => {
     const b = e.currentTarget; b.disabled = true;
     try { const r = await api('/api/conflicts/scan', { method: 'POST' }); toast(`검사했습니다. 신규 ${r.created}건, 미해결 ${r.open}건`, 'ok'); app.refreshMe(); await load(); showDetail(); } catch (err) { toast(err.message, 'err'); }
