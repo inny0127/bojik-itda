@@ -1,7 +1,7 @@
 // 학습: 자연어 입력 → AI 구조화 제안 → 사용자 수정 → 충돌 사전검증 → 승인/거부
-import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=ff3b30e6b1';
-import { readDocument, ACCEPT } from '../docread.js?v=ff3b30e6b1';
-import { openDoc } from './docs.js?v=ff3b30e6b1';
+import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=53868ba833';
+import { readDocument, ACCEPT } from '../docread.js?v=53868ba833';
+import { openDoc } from './docs.js?v=53868ba833';
 
 const SAMPLE = { url: 'samples/handover-sample-v8.pdf', name: '수송계원_인수인계서_v8_예시.pdf' };
 
@@ -164,6 +164,7 @@ const warnBox = (ws) => ((ws || []).length ? `<div class="warn-banner">${ws.map(
 
 function setDraft(ku, conflicts) {
   S.draft = ku;
+  S.prechecking = false;
   S.conflicts = conflicts || [];
   S.dirty = false;
   S.supersedes = ku.supersedes || '';
@@ -184,11 +185,19 @@ async function loadDraft(root, app, id) {
   if (!S.batch.some((b) => b.id === id)) { S.batch = []; S.notice = null; }
   try {
     const ku = await api(`/api/ku/${encodeURIComponent(id)}`);
-    const pre = ku.status === 'draft' ? (await api(`/api/ku/${encodeURIComponent(id)}/precheck`, { method: 'POST' })).conflicts : [];
-    setDraft(ku, pre);
+    // 초안은 바로 보여 주고, 충돌 사전검증(같은 업무 지식이 있으면 AI 의미 검사 포함)은 뒤에서 채움
+    setDraft(ku, []);
+    S.prechecking = ku.status === 'draft';
     root.querySelector('#rawText').value = ku.raw_text || '';
     await loadSameTask();
     renderEditor(root, app);
+    if (S.prechecking) {
+      const pre = await api(`/api/ku/${encodeURIComponent(id)}/precheck`, { method: 'POST' }).then((r) => r.conflicts).catch(() => []);
+      if (S.draft?.id !== id) return; // 그사이 다른 초안을 열었으면 무시
+      S.conflicts = pre;
+      S.prechecking = false;
+      renderPrecheck(root);
+    }
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -478,6 +487,7 @@ function renderPrecheck(root) {
   const el = root.querySelector('#precheck');
   if (!el) return;
   if (S.draft.status !== 'draft') { el.innerHTML = '<div class="muted small">승인 전 초안만 검사합니다.</div>'; return; }
+  if (S.prechecking) { el.innerHTML = '<div class="row small muted"><span class="spinner dark"></span>같은 업무의 기존 지식·규정과 비교하는 중입니다.</div>'; return; }
   const cs = S.conflicts.filter((c) => !c.inherited);
   const old = S.conflicts.filter((c) => c.inherited);
   const oldNote = old.length ? `<div class="small muted" style="margin-top:8px">개정 전 지식에 이미 있던 충돌 ${old.length}건(${old.map((c) => esc(c.rule_code)).join(', ')})은 그대로 남습니다. 충돌 화면에서 처리하세요.</div>` : '';
