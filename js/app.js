@@ -1,15 +1,15 @@
 // 보직잇다 SPA 셸: 인증, 라우팅, 보직 공간 전환
-import { api, esc, $, icon, toast, dday } from './util.js?v=ba02ddfac8';
-import * as login from './views/login.js?v=ba02ddfac8';
-import * as dashboard from './views/dashboard.js?v=ba02ddfac8';
-import * as learn from './views/learn.js?v=ba02ddfac8';
-import * as ask from './views/ask.js?v=ba02ddfac8';
-import * as conflicts from './views/conflicts.js?v=ba02ddfac8';
-import * as graph from './views/graph.js?v=ba02ddfac8';
-import * as knowledge from './views/knowledge.js?v=ba02ddfac8';
-import * as docs from './views/docs.js?v=ba02ddfac8';
-import * as admin from './views/admin.js?v=ba02ddfac8';
-import * as system from './views/system.js?v=ba02ddfac8';
+import { api, esc, $, icon, toast, dday } from './util.js?v=ff3b30e6b1';
+import * as login from './views/login.js?v=ff3b30e6b1';
+import * as dashboard from './views/dashboard.js?v=ff3b30e6b1';
+import * as learn from './views/learn.js?v=ff3b30e6b1';
+import * as ask from './views/ask.js?v=ff3b30e6b1';
+import * as conflicts from './views/conflicts.js?v=ff3b30e6b1';
+import * as graph from './views/graph.js?v=ff3b30e6b1';
+import * as knowledge from './views/knowledge.js?v=ff3b30e6b1';
+import * as docs from './views/docs.js?v=ff3b30e6b1';
+import * as admin from './views/admin.js?v=ff3b30e6b1';
+import * as system from './views/system.js?v=ff3b30e6b1';
 
 const ROUTES = {
   dashboard: { view: dashboard, label: '대시보드', icon: 'home' },

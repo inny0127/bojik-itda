@@ -1,5 +1,6 @@
-// 지식그래프 탐색: 힘-방향 레이아웃(SVG), 유형 필터, 검색, 노드 상세·출처 추적
-import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=ba02ddfac8';
+// 지식그래프 탐색: 방사형 배치(SVG), 유형 필터, 검색, 노드 상세·출처 추적
+// 물리 시뮬레이션 없이 한 번에 좌표를 계산(O(노드+관계))해 바로 그림 — 업무는 바깥 원, 업무 전용 항목(절차·주의 등)은 그 바깥, 여러 업무가 함께 쓰는 체계·규정은 안쪽 원
+import { api, esc, fmtDate, icon, CYCLE } from '../util.js?v=ff3b30e6b1';
 
 export async function render(root, app) {
   const g = await api('/api/graph');
@@ -30,89 +31,133 @@ export async function render(root, app) {
 
   const svg = root.querySelector('#gsvg');
   const W = svg.clientWidth || 800, H = svg.clientHeight || 600;
-  const byId = new Map(g.nodes.map((n) => [n.id, { ...n, x: W / 2 + (Math.random() - 0.5) * W * 0.6, y: H / 2 + (Math.random() - 0.5) * H * 0.6, vx: 0, vy: 0 }]));
+  const byId = new Map(g.nodes.map((n) => [n.id, { ...n, x: 0, y: 0 }]));
   const edges = g.edges.filter((e) => byId.has(e.src) && byId.has(e.dst));
-  // Task 노드 초기 배치: 원형
+  const adj = new Map([...byId.keys()].map((id) => [id, []]));
+  for (const e of edges) { adj.get(e.src).push(e.dst); adj.get(e.dst).push(e.src); }
   const tasks = [...byId.values()].filter((n) => n.type === 'Task');
-  tasks.forEach((n, i) => { const a = (i / tasks.length) * Math.PI * 2; n.x = W / 2 + Math.cos(a) * W * 0.25; n.y = H / 2 + Math.sin(a) * H * 0.28; });
-  const pos = [...byId.values()].find((n) => n.type === 'Position');
-  if (pos) { pos.x = W / 2; pos.y = H / 2; }
+  // 주기별로 묶어 원 위에 배치 (매일 → 매주 → … → 수시)
+  const ORDER = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'semiannual', 'annual', 'seasonal', 'adhoc', 'unknown'];
+  const cycleOf = new Map(edges.filter((e) => e.type === 'RESPONSIBLE_FOR').map((e) => [e.dst, e.props?.cycle || 'unknown']));
+  tasks.sort((a, b) => ORDER.indexOf(cycleOf.get(a.id) || 'unknown') - ORDER.indexOf(cycleOf.get(b.id) || 'unknown') || a.label.localeCompare(b.label, 'ko'));
+  const taskIdx = new Map(tasks.map((t, i) => [t.id, i]));
+  // 각 노드가 속한 업무(직접 연결 또는 지식단위·절차를 거쳐 연결)
+  const anchors = new Map();
+  for (const n of byId.values()) {
+    if (n.type === 'Task' || n.type === 'Position' || n.type === 'Unit') continue;
+    const set = new Set();
+    for (const m of adj.get(n.id)) {
+      if (taskIdx.has(m)) set.add(m);
+      else if (['KnowledgeUnit', 'ProcedureStep'].includes(byId.get(m).type)) for (const k of adj.get(m)) if (taskIdx.has(k)) set.add(k);
+    }
+    anchors.set(n.id, [...set]);
+  }
 
   let view = { x: 0, y: 0, k: 1 };
   let selectedId = null;
   let query = '';
   const visible = (n) => !hidden.has(n.type);
   const LABELED = new Set(['Position', 'Unit', 'Task', 'System', 'Rule']);
-  const R = (n) => (n.type === 'Position' ? 16 : n.type === 'Task' ? 12 : n.type === 'Unit' ? 11 : 7);
+  const R = (n) => (n.type === 'Position' ? 16 : n.type === 'Task' ? 9 : n.type === 'Unit' ? 11 : 6);
+  let ringR = 300;
+
+  function layout() {
+    const N = Math.max(tasks.length, 1);
+    ringR = Math.max(220, (N * 37) / (2 * Math.PI));
+    const ang = (i) => (2 * Math.PI * i) / N - Math.PI / 2;
+    for (const n of byId.values()) {
+      if (n.type === 'Position') { n.x = 0; n.y = 0; }
+      if (n.type === 'Unit') { n.x = 0; n.y = -70; }
+    }
+    tasks.forEach((t, i) => { t.a = ang(i); t.x = Math.cos(t.a) * ringR; t.y = Math.sin(t.a) * ringR; });
+    const slot = (2 * Math.PI) / N;
+    const own = new Map(tasks.map((t) => [t.id, []]));
+    const shared = [];
+    for (const n of byId.values()) {
+      if (!anchors.has(n.id) || !visible(n)) continue;
+      const an = anchors.get(n.id);
+      if (an.length === 1) own.get(an[0]).push(n);
+      else shared.push(n);
+    }
+    // 업무 전용 항목: 업무 바깥쪽에 2열로
+    for (const t of tasks) {
+      own.get(t.id).forEach((n, j) => {
+        const r = ringR + 46 + 30 * Math.floor(j / 2);
+        const a = t.a + ((j % 2) - 0.5) * slot * 0.42;
+        n.x = Math.cos(a) * r; n.y = Math.sin(a) * r;
+      });
+    }
+    // 공유 항목: 연결된 업무들의 평균 방향, 안쪽 원 위에서 겹치지 않게 간격 유지(넘치면 더 안쪽 원)
+    for (const n of shared) {
+      const an = anchors.get(n.id);
+      let sx = 0, sy = 0;
+      for (const id of an) { sx += Math.cos(byId.get(id).a); sy += Math.sin(byId.get(id).a); }
+      n.a = an.length ? Math.atan2(sy, sx) : 0;
+    }
+    shared.sort((p, q) => p.a - q.a);
+    const rings = [ringR * 0.58, ringR * 0.4, ringR * 0.24];
+    const gap = 34;
+    const used = rings.map(() => []);
+    for (const n of shared) {
+      let placed = false;
+      for (let k = 0; k < rings.length && !placed; k++) {
+        const min = gap / rings[k];
+        let a = n.a;
+        for (let step = 0; step < 40; step++) {
+          const clash = used[k].some((b) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) < min);
+          if (!clash) { used[k].push(a); n.x = Math.cos(a) * rings[k]; n.y = Math.sin(a) * rings[k]; placed = true; break; }
+          a += (step % 2 ? -1 : 1) * min * Math.ceil((step + 1) / 2);
+        }
+      }
+      if (!placed) { n.x = Math.cos(n.a) * rings[2]; n.y = Math.sin(n.a) * rings[2]; }
+    }
+  }
 
   svg.innerHTML = `<g id="vp"><g id="ge"></g><g id="gn"></g></g>`;
   const vp = svg.querySelector('#vp'), ge = svg.querySelector('#ge'), gn = svg.querySelector('#gn');
+  let edgeEls = [], nodeEls = [], visNodes = [];
+  const edgesOf = new Map();
 
+  // 업무 이름은 바퀴살 방향으로 안쪽을 향해 써서 이웃 업무와 겹치지 않게
+  const labelAttrs = (n) => {
+    if (n.type !== 'Task') return `dy="${R(n) + 12}" text-anchor="middle"`;
+    const deg = (n.a * 180) / Math.PI;
+    const right = Math.cos(n.a) >= 0;
+    return right ? `transform="rotate(${deg})" x="${-(R(n) + 5)}" dy="4" text-anchor="end"` : `transform="rotate(${deg + 180})" x="${R(n) + 5}" dy="4" text-anchor="start"`;
+  };
   function build() {
+    layout();
     const vis = new Set([...byId.values()].filter(visible).map((n) => n.id));
     const es = edges.filter((e) => vis.has(e.src) && vis.has(e.dst));
     ge.innerHTML = es.map((e, i) => `<line class="g-edge ${e.type === 'CONFLICTS_WITH' ? 'conf' : ''}" data-e="${i}" data-s="${esc(e.src)}" data-d="${esc(e.dst)}"/>`).join('');
     gn.innerHTML = [...byId.values()].filter(visible).map((n) => `<g class="g-node" data-id="${esc(n.id)}"><circle r="${R(n)}" fill="${types[n.type]?.color || '#999'}"/>
-      <text dy="${R(n) + 12}" text-anchor="middle" class="${LABELED.has(n.type) ? '' : 'minor'}" ${n.type === 'Task' ? 'font-weight="700" font-size="12"' : ''}>${esc(n.label.length > 16 ? `${n.label.slice(0, 16)}…` : n.label)}</text></g>`).join('');
+      <text ${labelAttrs(n)} class="${LABELED.has(n.type) ? '' : 'minor'}" ${n.type === 'Task' ? 'font-weight="700" font-size="13"' : ''}>${esc(n.label.length > (n.type === 'Task' ? 12 : 16) ? `${n.label.slice(0, n.type === 'Task' ? 12 : 16)}…` : n.label)}</text></g>`).join('');
     edgeEls = [...ge.children].map((l) => [l, byId.get(l.dataset.s), byId.get(l.dataset.d)]);
     nodeEls = [...gn.children].map((el) => [el, byId.get(el.dataset.id)]);
     visNodes = nodeEls.map(([, n]) => n);
+    edgesOf.clear();
+    for (const x of edgeEls) for (const n of [x[1], x[2]]) { if (!edgesOf.has(n.id)) edgesOf.set(n.id, []); edgesOf.get(n.id).push(x); }
+    for (const [el, n] of nodeEls) el.setAttribute('transform', `translate(${n.x},${n.y})`);
+    for (const x of edgeEls) drawEdge(x);
     return es;
   }
-  let edgeEls = [], nodeEls = [], visNodes = [];
+  const drawEdge = ([l, a, b]) => { l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y); };
   let activeEdges = build();
 
-  function tick(alpha) {
-    const nodes = visNodes;
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i], b = nodes[j];
-        let dx = b.x - a.x, dy = b.y - a.y;
-        let d2 = dx * dx + dy * dy || 1;
-        if (d2 > 160000) continue;
-        const f = (1500 / d2) * alpha;
-        const d = Math.sqrt(d2);
-        dx /= d; dy /= d;
-        a.vx -= dx * f * 8; a.vy -= dy * f * 8; b.vx += dx * f * 8; b.vy += dy * f * 8;
-      }
-    }
-    for (const e of activeEdges) {
-      const a = byId.get(e.src), b = byId.get(e.dst);
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      const target = a.type === 'Task' && b.type === 'Task' ? 190 : e.type === 'RESPONSIBLE_FOR' ? 220 : e.type === 'HAS_POSITION' ? 90 : 70;
-      const f = ((d - target) / d) * 0.05 * alpha;
-      a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
-    }
-    for (const n of nodes) {
-      n.vx += (W / 2 - n.x) * 0.002 * alpha; n.vy += (H / 2 - n.y) * 0.002 * alpha;
-      if (n.fixed) { n.vx = 0; n.vy = 0; continue; }
-      n.x += n.vx; n.y += n.vy; n.vx *= 0.55; n.vy *= 0.55;
-    }
-  }
-  function paint() {
-    for (const [l, a, b] of edgeEls) { l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y); }
-    for (const [el, n] of nodeEls) el.setAttribute('transform', `translate(${n.x},${n.y})`);
-    vp.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
-    svg.classList.toggle('zoomed', view.k > 1.5);
-  }
-  // 보이는 노드 전체가 화면에 들어오도록 확대·이동 (사용자가 직접 움직이기 전까지)
-  let touched = false;
+  // 보이는 노드 전체가 화면에 들어오도록 확대·이동
   function fit() {
     if (!visNodes.length) return;
     const xs = visNodes.map((n) => n.x), ys = visNodes.map((n) => n.y);
-    const x0 = Math.min(...xs) - 40, x1 = Math.max(...xs) + 40, y0 = Math.min(...ys) - 30, y1 = Math.max(...ys) + 40;
-    const k = Math.min(1.4, Math.max(0.3, Math.min(W / (x1 - x0), H / (y1 - y0))));
+    const x0 = Math.min(...xs) - 30, x1 = Math.max(...xs) + 30, y0 = Math.min(...ys) - 30, y1 = Math.max(...ys) + 30;
+    const k = Math.min(1.4, Math.max(0.2, Math.min(W / (x1 - x0), H / (y1 - y0))));
     view = { k, x: W / 2 - ((x0 + x1) / 2) * k, y: H / 2 - ((y0 + y1) / 2) * k };
   }
-  let alpha = 1, raf;
-  const run = () => { tick(alpha); if (!touched) fit(); paint(); alpha *= 0.96; if (alpha > 0.02) raf = requestAnimationFrame(run); };
-  // 초기 배치는 화면에 그리기 전에 최대 약 0.25초만 계산하고 나머지는 짧은 애니메이션으로 마무리
-  const tStart = performance.now();
-  for (let i = 0; i < 160 && performance.now() - tStart < 250; i++) { tick(1); }
-  alpha = 0.5;
-  run();
-  const reheat = (a = 0.5) => { alpha = Math.max(alpha, a); cancelAnimationFrame(raf); run(); };
+  function paint() {
+    vp.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+    svg.classList.toggle('zoomed', view.k > 1.3);
+  }
+  fit();
+  paint();
 
   function highlight() {
     const neigh = new Set();
@@ -151,7 +196,7 @@ export async function render(root, app) {
       <div class="small"><b>관계 ${allOut.length + allIn.length}</b>${allOut.length + allIn.length > out.length + inc.length ? ` <span class="muted xs">(표시 ${out.length + inc.length} · 숨긴 유형 제외)</span>` : ''}</div>
       ${out.map((e) => rel(e, 'out')).join('')}${inc.map((e) => rel(e, 'in')).join('')}
       ${kus.length ? `<div class="sep"></div><div class="small"><b>출처 지식단위</b></div><div class="row wrap" style="margin-top:6px">${kus.map((k) => `<a class="badge b-blue" href="#/knowledge/${esc(k)}">${esc(k)}</a>`).join('')}</div>` : ''}`;
-    root.querySelectorAll('[data-go]').forEach((a) => a.onclick = (ev) => { ev.preventDefault(); const t = byId.get(a.dataset.go); if (t && !visible(t)) { hidden.delete(t.type); root.querySelector(`.legend-item[data-t="${t.type}"]`)?.classList.remove('off'); activeEdges = build(); reheat(0.3); } select(a.dataset.go, true); });
+    root.querySelectorAll('[data-go]').forEach((a) => a.onclick = (ev) => { ev.preventDefault(); const t = byId.get(a.dataset.go); if (t && !visible(t)) { hidden.delete(t.type); root.querySelector(`.legend-item[data-t="${t.type}"]`)?.classList.remove('off'); activeEdges = build(); highlight(); } select(a.dataset.go, true); });
   }
   function select(id, center = false) {
     selectedId = id;
@@ -165,23 +210,25 @@ export async function render(root, app) {
   const pt = (e) => { const r = svg.getBoundingClientRect(); return { x: (e.clientX - r.left - view.x) / view.k, y: (e.clientY - r.top - view.y) / view.k }; };
   svg.addEventListener('mousedown', (e) => {
     const nodeEl = e.target.closest('.g-node');
-    if (nodeEl) { drag = { id: nodeEl.dataset.id, moved: false }; byId.get(drag.id).fixed = true; }
+    if (nodeEl) drag = { id: nodeEl.dataset.id, moved: false };
     else pan = { x: e.clientX - view.x, y: e.clientY - view.y, moved: false };
   });
   const onMove = (e) => {
-    if (drag || pan) touched = true;
-    if (drag) { const p = pt(e); const n = byId.get(drag.id); n.x = p.x; n.y = p.y; drag.moved = true; paint(); }
+    if (drag) {
+      const p = pt(e); const n = byId.get(drag.id); n.x = p.x; n.y = p.y; drag.moved = true;
+      nodeEls.find(([, m]) => m === n)?.[0].setAttribute('transform', `translate(${n.x},${n.y})`);
+      for (const x of edgesOf.get(n.id) || []) drawEdge(x);
+    }
     else if (pan) { view.x = e.clientX - pan.x; view.y = e.clientY - pan.y; pan.moved = true; paint(); }
   };
   const onUp = () => {
-    if (drag) { if (!drag.moved) { byId.get(drag.id).fixed = false; select(drag.id); } else reheat(0.15); drag = null; }
+    if (drag) { if (!drag.moved) select(drag.id); drag = null; }
     else if (pan) { if (!pan.moved) select(null); pan = null; }
   };
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', onUp);
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
-    touched = true;
     const r = svg.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const k2 = Math.min(3, Math.max(0.3, view.k * (e.deltaY < 0 ? 1.1 : 0.9)));
@@ -192,9 +239,9 @@ export async function render(root, app) {
     const t = el.dataset.t;
     if (hidden.has(t)) hidden.delete(t); else hidden.add(t);
     el.classList.toggle('off', hidden.has(t));
-    activeEdges = build(); touched = false; reheat(0.4); highlight();
+    activeEdges = build(); fit(); paint(); highlight();
   });
-  root.querySelector('#gfit').onclick = (e) => { e.preventDefault(); touched = false; fit(); paint(); };
+  root.querySelector('#gfit').onclick = (e) => { e.preventDefault(); fit(); paint(); };
   root.querySelector('#gq').oninput = (e) => {
     query = e.target.value; selectedId = null; highlight();
     const q = query.trim().toLowerCase();
@@ -204,5 +251,5 @@ export async function render(root, app) {
   const firstTask = tasks[0];
   if (firstTask) setTimeout(() => { if (root.querySelector('#ginfo')) info(firstTask.id); }, 50); // 이미 다른 화면으로 이동했으면 생략
 
-  return () => { cancelAnimationFrame(raf); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
 }

@@ -1,6 +1,7 @@
 // 학습: 자연어 입력 → AI 구조화 제안 → 사용자 수정 → 충돌 사전검증 → 승인/거부
-import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=ba02ddfac8';
-import { readDocument, ACCEPT } from '../docread.js?v=ba02ddfac8';
+import { api, esc, toast, modal, icon, fmtDate, ago, CYCLE, SEV, STATUS, badge, person } from '../util.js?v=ff3b30e6b1';
+import { readDocument, ACCEPT } from '../docread.js?v=ff3b30e6b1';
+import { openDoc } from './docs.js?v=ff3b30e6b1';
 
 const SAMPLE = { url: 'samples/handover-sample-v8.pdf', name: '수송계원_인수인계서_v8_예시.pdf' };
 
@@ -224,7 +225,10 @@ function renderEditor(root, app) {
   const dis = editable ? '' : 'disabled';
   const confDot = (c) => `<span class="conf-dot" title="추출 확신도 ${Math.round((c ?? 1) * 100)}%" style="background:${(c ?? 1) >= 0.8 ? '#16a34a' : (c ?? 1) >= 0.6 ? '#f59e0b' : '#dc2626'}"></span>`;
   const taskOpts = S.tasks.map((t) => `<option value="${esc(t.name)}">`).join('');
+  // 문서 일괄 학습 결과에서 연 초안이면 결과 목록으로 돌아가는 버튼
+  const fromImport = IMP.job && IMP.job.items.some((it) => it.id === k.id);
   el.innerHTML = `
+  ${fromImport ? `<div class="imp-back"><button class="btn sm" id="impBack">← 문서 일괄 학습 결과로</button><span class="xs muted">${esc(IMP.job.title)} · 초안 ${IMP.job.items.filter((it) => it.status === 'draft').length}건 남음</span></div>` : ''}
   <div class="card">
     <div class="card-h">
       <h3>구조화 결과</h3>
@@ -355,6 +359,14 @@ function wireEditor(root, app) {
   const s = S.draft.structure;
   let t;
   const touched = () => { S.dirty = true; clearTimeout(t); t = setTimeout(() => drawMini(root), 150); };
+  el.querySelector('#impBack')?.addEventListener('click', async () => {
+    if (S.dirty && !confirm('저장하지 않은 수정 내용이 있습니다. 결과 목록으로 돌아갈까요?')) return;
+    try { IMP.job = await api(`/api/learn/import/${IMP.job.id}`); } catch { /* 이전 목록 표시 */ }
+    S.draft = null; S.dirty = false;
+    renderStepper(root);
+    renderImportPanel(root, app);
+    root.querySelector('#impPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   el.querySelectorAll('[data-f]').forEach((inp) => inp.addEventListener('input', () => {
     const [a, b] = inp.dataset.f.split('.');
     s[a][b] = inp.value; touched();
@@ -533,7 +545,14 @@ function setupImport(root, app) {
     } catch (e) { toast(e.message, 'err'); }
   };
   // 진행 중이거나 최근에 끝난 가져오기가 있으면 이어서 표시
-  api('/api/learn/import').then((job) => { if (job && root.isConnected) { IMP.job = job; renderImportStatus(root, app); if (job.status === 'running') poll(root, app); } }).catch(() => {});
+  api('/api/learn/import').then((job) => {
+    if (!job || !root.isConnected) return;
+    IMP.job = job;
+    renderImportStatus(root, app);
+    if (job.status === 'running') poll(root, app);
+    // 다른 화면에 다녀왔을 때 확인할 초안이 남아 있으면 결과 목록을 다시 보여 줌
+    if (!S.draft && (job.status === 'running' || job.items.some((it) => it.status === 'draft'))) renderImportPanel(root, app);
+  }).catch(() => {});
 }
 
 async function pickFile(root, app, file) {
@@ -622,7 +641,7 @@ function renderImportPanel(root, app) {
   const running = j.status === 'running';
   ed.innerHTML = `<div class="card" id="impPanel">
     <div class="card-h"><h3>문서 일괄 학습</h3><span class="sub">${esc(j.title)} · ${j.pages}쪽 · ${j.engine === 'llm' ? 'gpt-6-luna' : '내장 엔진'}</span>
-      ${j.docId ? `<a class="btn sm" style="margin-left:auto" href="#/docs/${esc(j.docId)}">${icon('doc')} 원문</a>` : ''}</div>
+      ${j.docId ? `<button class="btn sm" style="margin-left:auto" id="impDoc">${icon('doc')} 원문 보기</button>` : ''}</div>
     <div class="card-b col" style="gap:12px">
       <div>
         <div class="row small">${running ? '<span class="spinner dark"></span>' : icon('check', 'width="16" height="16" style="color:var(--green);flex:none"')}<b>${running ? `구간 ${j.done}/${j.total} 분석 중` : `분석 완료 — 구간 ${j.total}개`}</b>
@@ -651,6 +670,7 @@ function renderImportPanel(root, app) {
         <button class="btn primary" id="impApprove" style="margin-left:auto" ${canApprove ? '' : 'disabled title="승인 권한이 없습니다"'}>${icon('check')} 선택한 초안 승인</button></div>` : ''}
     </div></div>`;
   ed.querySelectorAll('[data-view]').forEach((a) => a.onclick = (e) => { e.preventDefault(); loadDraft(root, app, a.dataset.view); });
+  ed.querySelector('#impDoc')?.addEventListener('click', () => openDoc(j.docId)); // 학습 화면을 떠나지 않고 팝업으로
   ed.querySelector('#impRetry')?.addEventListener('click', async () => {
     try { IMP.job = await api(`/api/learn/import/${j.id}/retry`, { method: 'POST' }); renderImportPanel(root, app); poll(root, app); } catch (e) { toast(e.message, 'err'); }
   });
